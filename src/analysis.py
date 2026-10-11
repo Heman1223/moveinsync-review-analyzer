@@ -340,3 +340,54 @@ def latest_snapshot(snapshots: pd.DataFrame | None, app_id: str) -> dict | None:
         return None
     s = snapshots[snapshots["app_id"] == app_id]
     return None if s.empty else s.iloc[-1].to_dict()
+
+
+# ---------------------------------------------------------------------------
+# Plain-English summary (top of the dashboard)
+# ---------------------------------------------------------------------------
+LOW_DATA_REVIEWS = 30
+REPLY_GOOD = 50
+
+
+def plain_summary(df: pd.DataFrame, snapshot: dict | None = None, exclude: set[str] | None = None) -> list[str]:
+    """Three or four short sentences a non-technical reader can act on. Every number comes from df."""
+    k = kpis(df, snapshot)
+    if k["reviews"] == 0:
+        return ["No written reviews in this period. Pick a longer period."]
+    out = []
+    if k["reviews"] < LOW_DATA_REVIEWS:
+        out.append(f"Only {k['reviews']} written reviews in this period, so treat everything below as anecdotes.")
+    if k["store_score"]:
+        out.append(f"The store rating ({k['store_score']:.2f}★) looks healthy, but people who write reviews average "
+                   f"{k['avg_rating']:.2f}★, and {k['pct_1_star']:.0f}% of them give 1★. Those written reviews are "
+                   f"what other users read.")
+    else:
+        out.append(f"People who write reviews average {k['avg_rating']:.2f}★; {k['pct_1_star']:.0f}% give 1★.")
+
+    summary = issue_summary(df)
+    top = top_fixes(summary, n=1, exclude=exclude)
+    if not top.empty:
+        t = top.iloc[0]
+        sentence = (f"The biggest fixable cause is {t['issue']} ({t['pct_of_complaints']:.0f}% of complaints, "
+                    f"{'an app' if t['fixable_by'] == 'App' else 'an operations'} fix)")
+        bd = sub_issue_breakdown(df, t["category"])
+        specific = bd[bd["actionable"]] if not bd.empty else bd
+        if not specific.empty:
+            s = specific.iloc[0]
+            sentence += f", mostly \"{s['problem']}\" ({s['share']:.0f}% of those)"
+        out.append(sentence + ". Start there.")
+
+        rising = summary[summary["share_before"].notna() & summary["share_last_period"].notna()
+                         & (summary["category"] != t["category"])].copy()
+        if not rising.empty:
+            rising["change"] = rising["share_last_period"] - rising["share_before"]
+            r = rising.sort_values("change", ascending=False).iloc[0]
+            if r["change"] >= 5:
+                out.append(f"Watch {r['issue']}: its share of complaints rose from {r['share_before']:.0f}% "
+                           f"to {r['share_last_period']:.0f}% in the last 90 days.")
+
+    rh = reply_health(df)
+    if rh["reply_rate_unhappy"] is not None and rh["reply_rate_unhappy"] < REPLY_GOOD:
+        out.append(f"Only {rh['reply_rate_unhappy']:.0f}% of 1–2★ reviews get a reply. Restarting replies is the "
+                   f"cheapest win: it needs no code.")
+    return out

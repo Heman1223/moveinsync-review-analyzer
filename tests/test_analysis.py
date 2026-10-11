@@ -146,3 +146,15 @@ def test_vague_buckets_are_not_actionable():
     bd = analysis.sub_issue_breakdown(df, "stability").set_index("sub_issue")
     assert not bd.loc["not_working", "actionable"]
     assert bd.loc["crash", "actionable"]
+
+
+def test_plain_summary_mentions_top_issue_and_replies(sample):
+    snap = {"score": 4.6, "ratings": 1000, "stars_1": 60}
+    text = " ".join(analysis.plain_summary(sample, snap))
+    assert "4.60" in text and "Login" in text and "reply" in text
+    assert "anecdotes" in text          # only 8 reviews in the sample
+
+
+def test_plain_summary_respects_issues_being_fixed(sample):
+    text = " ".join(analysis.plain_summary(sample, exclude={"login"}))
+    assert "biggest fixable cause is Cab late" in text

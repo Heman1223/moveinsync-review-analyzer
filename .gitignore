@@ -17,3 +17,7 @@ Thumbs.db
 
 # local tooling
 .claude/
+
+# derived data (rebuilt automatically from reviews.csv + rules)
+data/reviews_labelled.csv
+data/reviews_labelled.fingerprint.json

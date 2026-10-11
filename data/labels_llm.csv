@@ -1735,3 +1735,5 @@ f248dd88-a1ef-4d53-9431-7aa896deda05,login,,False,Says number is not registered,
 5a78e737-717b-4043-b77a-3d56fc6f3ee8,login,,False,Does not allow to register,gemini-3.8-flash,2026-10-11 09:49:26
 810f22ce-ce13-4883-b759-8c5f296f1104,login,support,False,Not recognizing registered number and no reply from support,gemini-3.8-flash,2026-10-11 09:49:26
 1c8a3c14-8635-4cf5-b27c-29acc06b5ec7,other,,False,Vague opinion saying not useful don't install,gemini-3.8-flash,2026-10-11 09:49:26
+04c98dd6-eea3-4eda-94c1-0d9a13bebcdd,support,safety,True,"Midway drop emergency call audio failed, couldn't hear during emergency.",gemini-3.8-flash,2026-10-11 10:47:30
+52ff2193-9bc9-4cd7-b409-574f9a216aee,booking,,False,Cannot book before 4 hours even if there is an emergency.,gemini-3.8-flash,2026-10-11 10:47:30
