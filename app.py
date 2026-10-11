@@ -1,4 +1,4 @@
-"""MoveInSync review analyzer: Streamlit dashboard.
+"""Ratings radar: MoveInSync Play Store review dashboard.
 
     streamlit run app.py
 
@@ -19,7 +19,7 @@ from src import analysis, benchmark, config, fix_tracker, pipeline, replies
 from src.classifier import category_name
 from src.playbook import EFFORT, VERIFY_FROM_REVIEWS
 
-st.set_page_config(page_title="MoveInSync review analyzer", page_icon="⭐", layout="wide")
+st.set_page_config(page_title="Ratings radar · MoveInSync", page_icon="⭐", layout="wide")
 
 PERIODS = {"30 days": 30, "90 days": 90, "6 months": 182, "12 months": 365, "All time": None}
 LOW_DATA = 30
@@ -29,7 +29,7 @@ FIXABLE_COLOR = {"App": "blue", "Ops": "orange", "Review": "red"}
 STATUS_COLOR = {"OK": "green", "WATCH": "orange", "ALERT": "red"}
 STATUS_ICON = {"OK": ":material/check_circle:", "WATCH": ":material/visibility:", "ALERT": ":material/warning:"}
 
-# Plain-English definitions, used as tooltips and in the "How it works" tab.
+# Plain-English definitions, used as tooltips and on the "How it works" page.
 GLOSSARY = {
     "Store rating": "The star rating shown on the Play Store. It counts everyone who rated, including the many "
                     "people who only tapped a star (mostly 5★) without writing anything.",
@@ -99,64 +99,73 @@ def run_refresh():
 
 
 # ---------------------------------------------------------------------------
-# Header and filters
+# Look and feel: tinted page, white cards (navy/slate in dark mode)
 # ---------------------------------------------------------------------------
-head_l, head_r = st.columns([4, 1], vertical_alignment="center")
-with head_l:
-    st.title("MoveInSync review analyzer")
-    st.caption(f"Why are Play Store ratings where they are, and what should we fix first? "
-               f"Public Google Play reviews · updated {last_updated()}")
-with head_r:
-    if st.button("Refresh data", icon=":material/refresh:", width="stretch",
-                 help="Fetch new reviews from Google Play (takes under a minute)."):
-        run_refresh()
+def inject_css():
+    dark = getattr(st.context.theme, "type", "light") == "dark"
+    card, border = ("#131C2E", "#24324A") if dark else ("#FFFFFF", "#E2E8F0")
+    shadow = "none" if dark else "0 1px 2px rgba(15,23,42,.06), 0 1px 3px rgba(15,23,42,.04)"
+    muted = "#94A3B8" if dark else "#64748B"
+    st.html(f"""<style>
+    .block-container {{ padding-top: 2.2rem; padding-left: 2.5rem; padding-right: 2.5rem; }}
+    [class*="st-key-card"] {{ background: {card}; border: 1px solid {border} !important; border-radius: 14px;
+        box-shadow: {shadow}; padding: 14px 16px 10px 16px; }}
+    [class*="st-key-card-app"] {{ border-top: 4px solid #3B82F6 !important; }}
+    [class*="st-key-card-ops"] {{ border-top: 4px solid #F59E0B !important; }}
+    [class*="st-key-card-win"] {{ border-top: 4px solid #22C55E !important; }}
+    [class*="st-key-panel"] {{ background: {card}; border: 1px solid {border} !important; border-radius: 14px;
+        box-shadow: {shadow}; padding: 6px 14px; }}
+    [data-testid="stMetric"] {{ background: {card}; border: 1px solid {border}; border-radius: 14px;
+        box-shadow: {shadow}; padding: 12px 14px 4px 14px; }}
+    [data-testid="stSidebar"] {{ border-right: 1px solid {border}; }}
+    .brand {{ font-weight: 700; font-size: 1.15rem; letter-spacing: -0.01em; }}
+    .brand-sub {{ color: {muted}; font-size: 0.8rem; margin-top: -2px; }}
+    .muted {{ color: {muted}; font-size: 0.8rem; }}
+    .verdict {{ border-radius: 14px; padding: 16px 18px; margin: 4px 0 18px 0; }}
+    .verdict .head {{ font-size: 1.2rem; font-weight: 650; line-height: 1.35; }}
+    .verdict .sub {{ font-size: 0.92rem; margin-top: 6px; opacity: .85; }}
+    .eyebrow {{ text-transform: uppercase; letter-spacing: .06em; font-size: .72rem; font-weight: 600;
+        color: {muted}; margin: 6px 0 6px 0; }}
+    </style>""")
+
+
+VERDICT_STYLE = {
+    "OK": ("rgba(34,197,94,.12)", "#22C55E", "All steady"),
+    "WATCH": ("rgba(245,158,11,.14)", "#F59E0B", "Watch"),
+    "ALERT": ("rgba(239,68,68,.14)", "#EF4444", "Alert"),
+}
+
+
+# ---------------------------------------------------------------------------
+# Sidebar: brand, pages, filters, refresh
+# ---------------------------------------------------------------------------
+inject_css()
 
 if not config.REVIEWS_CSV.exists():
-    st.info("No data yet. Click **Refresh data** to fetch reviews (takes a few minutes the first time).")
+    st.info("No data yet. Run `python refresh.py` to fetch reviews (a few minutes the first time).")
     st.stop()
 
 data = load_data(pipeline._fingerprint())
 snaps = load_snapshots(_mtime(config.SNAPSHOTS_CSV))
+bench = benchmark.latest()
 
-app_options = {meta["name"]: app_id for app_id, meta in config.APPS.items()}
-f1, f2 = st.columns([3, 3])
-with f1:
-    app_choice = st.segmented_control("App", list(app_options) + ["Compare apps"],
-                                      default=next(iter(app_options)), label_visibility="collapsed")
-with f2:
-    period_choice = st.segmented_control("Period", list(PERIODS), default="12 months",
-                                         label_visibility="collapsed")
+with st.sidebar:
+    st.html('<div class="brand">⭐ Ratings radar</div>'
+            '<div class="brand-sub">MoveInSync · Google Play reviews</div>')
+    nav_box = st.container()
+    st.divider()
+    app_options = {meta["name"]: app_id for app_id, meta in config.APPS.items()}
+    app_choice = st.segmented_control("App", list(app_options), default=next(iter(app_options)), key="f_app")
+    period_choice = st.segmented_control("Period", list(PERIODS), default="12 months", key="f_period")
+    st.divider()
+    st.html(f'<div class="muted">Updated {last_updated()}<br>Auto-refresh every Monday</div>')
+    if st.button("Refresh now", icon=":material/refresh:", width="stretch",
+                 help="Fetch new reviews from Google Play (under a minute)."):
+        run_refresh()
+
 app_choice = app_choice or next(iter(app_options))
 period_choice = period_choice or "12 months"
 days = PERIODS[period_choice]
-
-
-# ---------------------------------------------------------------------------
-# Compare view
-# ---------------------------------------------------------------------------
-if app_choice == "Compare apps":
-    start = analysis.period_start(data, days)
-    comp = analysis.compare_apps(data, snaps, start)
-    st.subheader(f"Apps side by side · {period_choice.lower()}")
-    st.dataframe(
-        comp, hide_index=True, width="stretch",
-        column_config={
-            "app": "App", "reviews": "Written reviews",
-            "avg_rating": st.column_config.NumberColumn("Written-review rating", format="%.2f",
-                                                        help=GLOSSARY["Written-review rating"]),
-            "pct_1_star": st.column_config.NumberColumn("1★ share", format="%.1f%%"),
-            "reply_rate_unhappy": st.column_config.NumberColumn("Replied to 1–2★", format="%.1f%%"),
-            "store_score": st.column_config.NumberColumn("Store rating", format="%.2f", help=GLOSSARY["Store rating"]),
-            "store_ratings": st.column_config.NumberColumn("Store ratings", format="%d"),
-        })
-    st.caption("Store rating includes people who rated without writing a review. Written reviews are the ones "
-               "other users read, and they are much more critical.")
-    st.stop()
-
-
-# ---------------------------------------------------------------------------
-# Single-app data
-# ---------------------------------------------------------------------------
 app_id = app_options[app_choice]
 app_all = analysis.filter_period(data, app_id)
 df = analysis.filter_period(app_all, start=analysis.period_start(app_all, days))
@@ -166,63 +175,132 @@ rh = analysis.reply_health(df)
 summary = analysis.issue_summary(df)
 tracker = fix_tracker.load(app_id)
 tracked = set(tracker["category"])
-
-tab_sum, tab_issues, tab_reply, tab_fix, tab_bench, tab_how = st.tabs(
-    ["Summary", "Issues", "Reply to reviews", f"Fix tracker{f' ({len(tracker)})' if len(tracker) else ''}",
-     "Benchmark", "How it works"])
+status = analysis.weekly_status(app_all)
 GEMINI_DRAFTS_PER_SESSION = 20   # protects the API budget; saved drafts don't count
 
 
 def fix_form(category: str, key: str, note_default: str = ""):
     """Small form to put an issue into the fix tracker."""
-    status = st.radio("Status", fix_tracker.STATUSES, horizontal=True, key=f"{key}_status")
+    status_pick = st.radio("Status", fix_tracker.STATUSES, horizontal=True, key=f"{key}_status")
     since = st.date_input("Since", value=date.today(), key=f"{key}_date",
                           help="When work started or the fix was released. Before/after numbers use this date.")
     note = st.text_input("Note (optional)", value=note_default, placeholder="e.g. session timeout raised in v12.20",
                          key=f"{key}_note")
     if st.button("Save", key=f"{key}_save", type="primary"):
-        fix_tracker.set_status(app_id, category, status, since, note)
+        fix_tracker.set_status(app_id, category, status_pick, since, note)
         st.rerun()
 
 
-# ---------------------------------------------------------------------------
-# Summary tab
-# ---------------------------------------------------------------------------
-with tab_sum:
-    status = analysis.weekly_status(app_all)
-    with st.container(border=True):
-        s1, s2 = st.columns([1, 5], vertical_alignment="center")
-        with s1:
-            st.badge(f"Status: {status['status']}", color=STATUS_COLOR[status["status"]],
-                     icon=STATUS_ICON[status["status"]])
-        with s2:
-            for reason in status["reasons"]:
-                st.markdown(f"- {reason}")
-        st.caption("Checks this app's latest reviews, whatever period is selected. The rules are listed in "
-                   "**How it works**.", help=GLOSSARY["Status"])
+def page_header(title: str, subtitle: str = ""):
+    st.markdown(f"## {title}")
+    if subtitle:
+        st.caption(subtitle)
+    if k["reviews"] < LOW_DATA:
+        st.warning(f"Only {k['reviews']} written reviews for {app_choice} in this period, so treat these numbers as "
+                   f"anecdotes. Try a longer period.", icon=":material/warning:")
 
-    with st.container(border=True):
-        st.markdown("**In short**")
-        for sentence in analysis.plain_summary(df, snap, exclude=tracked):
-            st.markdown(f"- {sentence}")
 
-    c1, c2, c3, c4 = st.columns(4)
-    c1.metric("Written-review rating", f"{k['avg_rating']:.2f} ★" if k["avg_rating"] else "–",
-              delta=(f"{k['avg_rating'] - k['store_score']:+.2f} vs store {k['store_score']:.2f}"
-                     if k["avg_rating"] and k["store_score"] else None),
-              help=GLOSSARY["Written-review rating"] + " " + GLOSSARY["Store rating"])
-    c2.metric("1★ share", f"{k['pct_1_star']:.0f}%" if k["pct_1_star"] is not None else "–",
-              delta=(f"{k['pct_1_star'] - k['store_pct_1_star']:+.0f} pts vs store"
-                     if k["store_pct_1_star"] and k["pct_1_star"] is not None else None),
-              delta_color="inverse", help="Share of written reviews that give 1 star, compared with all store ratings.")
-    c3.metric("1–2★ reviews replied to",
+# ---------------------------------------------------------------------------
+# Overview page: the answer and the actions first; details one click away
+# ---------------------------------------------------------------------------
+def page_overview():
+    top = analysis.top_fixes(summary, n=3, exclude=tracked)
+    cards = []
+    for _, r in top.iterrows():
+        bd = analysis.sub_issue_breakdown(df, r["category"])
+        spec = bd[bd["actionable"]] if not bd.empty else bd
+        cards.append((r, spec.iloc[0] if not spec.empty else None))
+
+    # Verdict: one line + one short line
+    bg, edge, word = VERDICT_STYLE[status["status"]]
+    phrases = status["short"][:2]
+    head = f"{word}: {' and '.join(phrases)}" if status["status"] != "OK" else "All steady: nothing unusual lately"
+    bits = []
+    if not bench.empty and app_id in set(bench["app_id"]):
+        peers = bench[bench["group"] == "Employee transport"]
+        me = bench[bench["app_id"] == app_id].iloc[0]
+        if len(peers):
+            rank = int((peers["store_score"] > me["store_score"]).sum()) + 1
+            bits.append(f"#{rank} of {len(peers) + 1} employee-transport apps ({me['store_score']:.2f}★)")
+    if cards:
+        bits.append(f"fix first: {cards[0][0]['issue'].split(',')[0]}")
+    st.html(f'<div class="verdict" style="background:{bg};border-left:5px solid {edge}">'
+            f'<div class="head">{head[0].upper() + head[1:]}</div>'
+            f'<div class="sub">{" · ".join(bits)}</div></div>')
+
+    # Do this next
+    st.html('<div class="eyebrow">Do this next</div>')
+    cols = st.columns(4, gap="medium")
+    for i, (r, spec) in enumerate(cards):
+        kind = "app" if r["fixable_by"] == "App" else "ops"
+        with cols[i]:
+            with st.container(key=f"card-{kind}-{i}"):
+                tags = st.container(horizontal=True, gap="small")
+                tags.badge(FIXABLE_LABEL[r["fixable_by"]], color=FIXABLE_COLOR[r["fixable_by"]])
+                if pd.notna(r["share_before"]) and r["share_last_period"] - r["share_before"] >= analysis.STATUS_RULES["watch_issue_rise"]:
+                    tags.badge("Rising", color="red", icon=":material/trending_up:")
+                st.markdown(f"**{i + 1}. {r['issue']}**")
+                st.caption(f"{r['pct_of_complaints']:.0f}% of complaints · could add +{r['uplift']:.2f}★")
+                if spec is not None:
+                    st.markdown(f"Start with **{spec['problem']}**")
+                    st.progress(min(1.0, spec["share"] / 100), text=f"{spec['share']:.0f}% of these complaints")
+                    st.caption(f"{spec['owner']} · effort {int(spec['effort'])}/5")
+                with st.popover("Track this fix", icon=":material/build:", width="stretch"):
+                    fix_form(r["category"], key=f"ov_{r['category']}",
+                             note_default=spec["problem"] if spec is not None else "")
+    if not cards:
+        cols[0].info("Every ranked issue is in the fix tracker.")
+    if rh["reply_rate_unhappy"] is not None and rh["reply_rate_unhappy"] < REPLY_TARGET:
+        with cols[3]:
+            with st.container(key="card-win"):
+                st.badge("Quick win", color="green", icon=":material/bolt:")
+                st.markdown("**Reply to unhappy reviews**")
+                st.caption(f"{rh['unhappy_reviews'] - rh['unhappy_replied']} of {rh['unhappy_reviews']} unanswered "
+                           f"· no code needed")
+                st.progress(min(1.0, rh["reply_rate_unhappy"] / 100),
+                            text=f"{rh['reply_rate_unhappy']:.0f}% answered (aim for {REPLY_TARGET}%)")
+                if rh["edited_after_reply"]:
+                    st.caption(f"{rh['edited_now_4_5']} of {rh['edited_after_reply']} who got a reply now show 4–5★")
+                st.page_link(PAGES["replies"], label="Start replying", icon=":material/arrow_forward:")
+
+    safety = analysis.safety_reviews(df)
+    if len(safety):
+        st.page_link(PAGES["issues"], icon=":material/shield:",
+                     label=f"{len(safety)} safety-related complaints need someone to read them")
+
+    # The numbers
+    st.html('<div class="eyebrow" style="margin-top:14px">The numbers</div>')
+    trend = analysis.monthly_trend(df).tail(12)
+    rival = bench[bench["name"] == "Routematic"].iloc[0] if not bench.empty and "Routematic" in set(bench["name"]) else None
+    refs = bench[bench["group"] == "Ride-hailing (reference)"] if not bench.empty else bench
+    m1, m2, m3, m4 = st.columns(4, gap="medium")
+    m1.metric("Store rating", f"{k['store_score']:.2f}★" if k["store_score"] else "–",
+              delta=f"{k['store_ratings']:,} ratings" if k["store_ratings"] else None,
+              delta_color="off", delta_arrow="off", help=GLOSSARY["Store rating"])
+    ref_txt = " · ".join(f"{r['name']} {r['written_avg']:.2f}" for _, r in refs.head(2).iterrows()) if len(refs) else None
+    m2.metric("Written-review rating", f"{k['avg_rating']:.2f}★" if k["avg_rating"] else "–",
+              delta=ref_txt, delta_color="off", delta_arrow="off",
+              chart_data=trend["avg_rating"].tolist() if len(trend) > 2 else None, chart_type="line",
+              help=GLOSSARY["Written-review rating"])
+    m3.metric("1★ share", f"{k['pct_1_star']:.0f}%" if k["pct_1_star"] is not None else "–",
+              delta=f"Routematic {rival['pct_1_star']:.0f}%" if rival is not None else None,
+              delta_color="off", delta_arrow="off",
+              chart_data=trend["pct_1_star"].tolist() if len(trend) > 2 else None, chart_type="line")
+    m4.metric("Replies to 1–2★",
               f"{rh['reply_rate_unhappy']:.0f}%" if rh["reply_rate_unhappy"] is not None else "–",
-              delta=f"target {REPLY_TARGET}%", delta_color="off",
-              help=f"{rh['unhappy_replied']} of {rh['unhappy_reviews']} unhappy reviews got a reply from MoveInSync.")
-    c4.metric("Reviews analysed", f"{k['reviews']:,}",
-              delta=(f"{k['date_from']:%d %b %Y} – {k['date_to']:%d %b %Y}" if k["reviews"] else None),
-              delta_color="off")
+              delta=f"Routematic {rival['reply_rate_unhappy']:.0f}%" if rival is not None else f"aim for {REPLY_TARGET}%",
+              delta_color="off", delta_arrow="off",
+              chart_data=trend["pct_replied"].tolist() if len(trend) > 2 else None, chart_type="line")
 
+    with st.expander("See the trends: rating by month, star mix, releases", icon=":material/monitoring:"):
+        render_trends()
+    with st.expander("Why this status?", icon=":material/help:"):
+        for reason in status["reasons"]:
+            st.markdown(f"- {reason}")
+        st.caption("Simple published rules; see How it works.")
+
+
+def render_trends():
     trend_col, dist_col = st.columns([3, 1])
     with trend_col:
         st.markdown("**Average rating by month** · written reviews")
@@ -232,10 +310,10 @@ with tab_sum:
         if len(band):
             fig.add_trace(go.Scatter(x=pd.concat([band["month"], band["month"][::-1]]),
                                      y=pd.concat([band["avg_hi"], band["avg_lo"][::-1]]),
-                                     fill="toself", fillcolor="rgba(76,155,232,0.15)", line=dict(width=0),
+                                     fill="toself", fillcolor="rgba(59,130,246,0.15)", line=dict(width=0),
                                      hoverinfo="skip", showlegend=False))
         fig.add_trace(go.Scatter(x=trend["month"], y=trend["avg_rating"], mode="lines+markers",
-                                 name="Avg ★", line=dict(width=2),
+                                 name="Avg ★", line=dict(width=2, color="#3B82F6"),
                                  customdata=trend[["reviews", "pct_1_star"]],
                                  hovertemplate="%{x|%b %Y}<br>%{y:.2f} ★<br>%{customdata[0]} reviews"
                                                "<br>%{customdata[1]}% 1★<extra></extra>"))
@@ -253,93 +331,50 @@ with tab_sum:
         fig.update_layout(height=280, margin=dict(l=0, r=0, t=10, b=0), yaxis=dict(range=[1, 5], title=None),
                           xaxis=dict(title=None), showlegend=False)
         st.plotly_chart(fig, width="stretch")
-        st.caption("Shaded band: plausible range for each month (wider when there are fewer reviews). "
-                   "▲ and dotted lines mark app releases (versions with 30+ reviews).", help=GLOSSARY["Plausible range"])
+        st.caption("Shaded band: plausible range for each month. ▲ marks app releases (30+ reviews).",
+                   help=GLOSSARY["Plausible range"])
     with dist_col:
-        st.markdown("**Star distribution**")
+        st.markdown("**Star mix**")
         dist = df["rating"].value_counts().reindex([5, 4, 3, 2, 1], fill_value=0)
         bar = go.Figure(go.Bar(x=dist.values, y=[f"{s}★" for s in dist.index], orientation="h",
                                text=[f"{v / max(len(df), 1):.0%}" for v in dist.values], textposition="auto",
-                               marker_color=["#4C9BE8", "#4C9BE8", "#9AA0A6", "#E5735C", "#E5735C"],
+                               marker_color=["#3B82F6", "#3B82F6", "#94A3B8", "#EF4444", "#EF4444"],
                                hovertemplate="%{y}: %{x} reviews<extra></extra>"))
         bar.update_layout(height=280, margin=dict(l=0, r=0, t=10, b=0), xaxis=dict(visible=False),
-                          yaxis=dict(autorange="reversed"))  # 5★ on top
+                          yaxis=dict(autorange="reversed"))
         st.plotly_chart(bar, width="stretch")
 
     vr = analysis.version_ranges(df)
+    vr = vr[vr["reviews"] >= 10] if not vr.empty else vr
     if not vr.empty:
-        with st.expander("Did a release make things worse? 1★ share by app version", icon=":material/new_releases:"):
-            vr = vr[vr["reviews"] >= 10]
-            colors = ["#4C9BE8" if ok else "rgba(150,150,150,0.5)" for ok in vr["enough_data"]]
-            vfig = go.Figure(go.Bar(
-                x=["v" + v for v in vr["version"]], y=vr["pct_1_star"], marker_color=colors,
-                error_y=dict(type="data", symmetric=False, array=vr["pct_1_hi"] - vr["pct_1_star"],
-                             arrayminus=vr["pct_1_star"] - vr["pct_1_lo"], color="gray", thickness=1),
-                customdata=vr[["reviews", "pct_1_lo", "pct_1_hi"]],
-                hovertemplate="%{x}: %{y:.0f}% 1★ (plausible %{customdata[1]:.0f}–%{customdata[2]:.0f}%)"
-                              "<br>%{customdata[0]} reviews<extra></extra>"))
-            vfig.update_layout(height=280, margin=dict(l=0, r=0, t=10, b=0),
-                               yaxis=dict(title="% of reviews that are 1★", rangemode="tozero"))
-            st.plotly_chart(vfig, width="stretch")
-            st.caption("Whiskers show the plausible range. If two versions' whiskers overlap, the difference may be "
-                       "chance. Grey bars have fewer than 30 reviews.", help=GLOSSARY["Plausible range"])
+        st.markdown("**Did a release make things worse?** 1★ share by app version")
+        colors = ["#3B82F6" if ok else "rgba(150,150,150,0.5)" for ok in vr["enough_data"]]
+        vfig = go.Figure(go.Bar(
+            x=["v" + v for v in vr["version"]], y=vr["pct_1_star"], marker_color=colors,
+            error_y=dict(type="data", symmetric=False, array=vr["pct_1_hi"] - vr["pct_1_star"],
+                         arrayminus=vr["pct_1_star"] - vr["pct_1_lo"], color="gray", thickness=1),
+            customdata=vr[["reviews", "pct_1_lo", "pct_1_hi"]],
+            hovertemplate="%{x}: %{y:.0f}% 1★ (plausible %{customdata[1]:.0f}–%{customdata[2]:.0f}%)"
+                          "<br>%{customdata[0]} reviews<extra></extra>"))
+        vfig.update_layout(height=260, margin=dict(l=0, r=0, t=10, b=0),
+                           yaxis=dict(title="% 1★", rangemode="tozero"))
+        st.plotly_chart(vfig, width="stretch")
+        st.caption("Whiskers show the plausible range; overlapping whiskers may just be chance. Grey: under 30 reviews.")
 
-    st.subheader("Fix these first")
-    st.caption("Ranked by rating impact (hover the ⓘ for what that means). Mark an issue as being fixed and the next "
-               "one moves up; reviews take weeks to catch up with a fix, so follow progress in the Fix tracker tab.",
-               help=GLOSSARY["Rating impact"])
-    top = analysis.top_fixes(summary, exclude=tracked)
-    cards = st.columns(4)
-    for i, r in top.iterrows():
-        with cards[i].container(border=True):
-            st.badge(FIXABLE_LABEL[r["fixable_by"]], color=FIXABLE_COLOR[r["fixable_by"]])
-            st.markdown(f"**#{i + 1} {r['issue']}**")
-            plural = "s" if r["reviews"] != 1 else ""
-            st.markdown(f"{r['reviews']} complaint{plural} · {r['pct_of_complaints']:.0f}% of all complaints  \n"
-                        f"Could lift rating by about **+{r['uplift']:.2f}★**")
-            if pd.notna(r["share_before"]) and pd.notna(r["share_last_period"]):
-                change = r["share_last_period"] - r["share_before"]
-                if abs(change) >= 2:
-                    arrow = "rising" if change > 0 else "falling"
-                    st.caption(f"Share {arrow}: {r['share_before']:.0f}% → {r['share_last_period']:.0f}% "
-                               f"(last 90 days)")
-            bd = analysis.sub_issue_breakdown(df, r["category"])
-            specific = bd[bd["actionable"]] if not bd.empty else bd
-            note_default = ""
-            if not specific.empty:
-                b = specific.iloc[0]
-                note_default = b["problem"]
-                st.markdown(f"**Start with:** {b['problem']} ({b['share']:.0f}% of these)")
-                st.caption(b["first_step"])
-                st.caption(f"**Who:** {b['owner']}  \n**Effort:** {int(b['effort'])}/5 · {EFFORT[int(b['effort'])]}")
-            with st.popover("Mark as being fixed", icon=":material/build:", width="stretch"):
-                fix_form(r["category"], key=f"card_{r['category']}", note_default=note_default)
-            st.caption("Full plan for each problem: **Issues** tab.")
-    if top.empty:
-        cards[0].info("Every ranked issue is in the Fix tracker.")
-    if rh["reply_rate_unhappy"] is not None and rh["reply_rate_unhappy"] < REPLY_TARGET:
-        with cards[3].container(border=True):
-            st.badge("Quick win", color="green")
-            st.markdown("**Reply to unhappy reviews**")
-            st.markdown(f"{rh['unhappy_reviews'] - rh['unhappy_replied']} of {rh['unhappy_reviews']} 1–2★ reviews "
-                        f"unanswered · no code needed")
-            if rh["edited_after_reply"]:
-                st.caption(f"Historically, {rh['edited_after_reply']} reviewers edited after a reply; "
-                           f"{rh['edited_now_4_5']} now show 4–5★.")
 
+# ---------------------------------------------------------------------------
+# Issues page
+# ---------------------------------------------------------------------------
+def page_issues():
+    page_header("Issues", "What people complain about, what exactly, and what to do. Click a row to look closer.")
     safety = analysis.safety_reviews(df)
     if len(safety):
-        with st.expander(f":red[**{len(safety)} safety-related complaints need human review**]",
+        with st.expander(f":red[**{len(safety)} safety-related complaints need someone to read them**]",
                          icon=":material/shield:"):
-            st.caption("Flagged by keywords or the LLM. Always shown, however few there are. Some may be false alarms.")
-            for s in safety.itertuples():
-                st.markdown(f"- {s.rating}★ · {s.review_date:%d %b %Y} · {s.review_text}")
+            st.caption("Flagged by keywords or the LLM. Always shown, however few. Some may be false alarms.")
+            for s_ in safety.itertuples():
+                st.markdown(f"- {s_.rating}★ · {s_.review_date:%d %b %Y} · {s_.review_text}")
 
-
-# ---------------------------------------------------------------------------
-# Issues tab
-# ---------------------------------------------------------------------------
-with tab_issues:
     if summary.empty:
         st.info("No complaints in this period.")
     else:
@@ -417,7 +452,7 @@ with tab_issues:
                             st.markdown(f"**How you'll know it worked:**  \n"
                                         f"- In MoveInSync's data, watch: {c.measure}.  \n"
                                         f"- In reviews: {VERIFY_FROM_REVIEWS}")
-                            with st.popover("Mark as being fixed", icon=":material/build:"):
+                            with st.popover("Track this fix", icon=":material/build:"):
                                 fix_form(cat, key=f"issue_{cat}_{c.sub_issue}", note_default=c.problem)
 
             st.markdown("**Read the reviews**")
@@ -475,9 +510,11 @@ with tab_issues:
 
 
 # ---------------------------------------------------------------------------
-# Reply to reviews tab
+# Reply to reviews page
 # ---------------------------------------------------------------------------
-with tab_reply:
+def page_replies():
+    page_header("Replies", "Answer unhappy reviews in a few clicks.")
+
     todo = replies.unanswered(df)
     unhappy_total = int((df["rating"] <= 2).sum())
     bench_now = benchmark.latest()
@@ -544,16 +581,17 @@ with tab_reply:
 
 
 # ---------------------------------------------------------------------------
-# Fix tracker tab
+# Fix tracker page
 # ---------------------------------------------------------------------------
-with tab_fix:
-    st.markdown("#### Is the fix working?")
+def page_tracker():
+    page_header("Fix tracker", "Is the fix working? Complaints per 100 reviews, before and after.")
+
     st.caption("Reviews take weeks to react to a fix. For each issue the team is working on, this compares complaints "
                "per 100 written reviews in the 90 days before the date with the period since. It needs 50+ reviews "
                "after the date before it gives a verdict.", help=GLOSSARY["Per 100 reviews"])
     if tracker.empty:
-        st.info("Nothing is being tracked yet. On the **Summary** tab, use **Mark as being fixed** on an issue card. "
-                "It moves here, and the next issue takes its place in *Fix these first*.")
+        st.info("Nothing is being tracked yet. On the **Overview** page, use **Track this fix** on an action card. "
+                "It moves here, and the next issue takes its place in *Do this next*.")
     verdict_color = {"Improving": "green", "Getting worse": "red", "No clear change yet": "orange"}
     for t in tracker.itertuples():
         prog = analysis.fix_progress(app_all, t.category, t.since)
@@ -578,10 +616,11 @@ with tab_fix:
 
 
 # ---------------------------------------------------------------------------
-# Benchmark tab
+# Benchmark page
 # ---------------------------------------------------------------------------
-with tab_bench:
-    bench = benchmark.latest()
+def page_benchmark():
+    st.markdown("## Benchmark")
+
     if bench.empty:
         st.info("No benchmark yet. Run `python -m scripts.benchmark` (about 2 minutes, no Gemini).")
     else:
@@ -647,11 +686,27 @@ with tab_bench:
                    "rough for other apps (ride-hailing complaints about bookings and fares all land in "
                    "\"Booking\"). Public numbers only; no claims about why other apps score as they do.")
 
+    st.markdown("**MoveInSync's own apps side by side**")
+    comp = analysis.compare_apps(data, snaps, analysis.period_start(data, days))
+    st.dataframe(
+        comp, hide_index=True, width="stretch",
+        column_config={
+            "app": "App", "reviews": "Written reviews",
+            "avg_rating": st.column_config.NumberColumn("Written-review rating", format="%.2f"),
+            "pct_1_star": st.column_config.NumberColumn("1★ share", format="%.1f%%"),
+            "reply_rate_unhappy": st.column_config.NumberColumn("Replied to 1–2★", format="%.1f%%"),
+            "store_score": st.column_config.NumberColumn("Store rating", format="%.2f"),
+            "store_ratings": st.column_config.NumberColumn("Store ratings", format="%d"),
+        })
+    st.caption(f"Period: {period_choice.lower()}.")
+
 
 # ---------------------------------------------------------------------------
-# How it works tab
+# How it works page
 # ---------------------------------------------------------------------------
-with tab_how:
+def page_how():
+    st.markdown("## How it works")
+
     cov = analysis.uncategorised(df)
     st.markdown(f"""
 #### Where the data comes from
@@ -709,3 +764,24 @@ likely is (95%). When two ranges overlap, treat the difference as "maybe", not "
     st.dataframe(pd.DataFrame(GLOSSARY.items(), columns=["Term", "Meaning"]), hide_index=True, width="stretch",
                  column_config={"Term": st.column_config.TextColumn(width="small"),
                                 "Meaning": st.column_config.TextColumn(width="large")})
+
+
+# ---------------------------------------------------------------------------
+# Navigation (sidebar links, with counts where they help)
+# ---------------------------------------------------------------------------
+PAGES = {
+    "overview": st.Page(page_overview, title="Overview", icon=":material/space_dashboard:", default=True),
+    "issues": st.Page(page_issues, title="Issues", icon=":material/manage_search:", url_path="issues"),
+    "replies": st.Page(page_replies, title="Replies", icon=":material/forum:", url_path="replies"),
+    "tracker": st.Page(page_tracker, title="Fix tracker", icon=":material/build:", url_path="fix-tracker"),
+    "benchmark": st.Page(page_benchmark, title="Benchmark", icon=":material/leaderboard:", url_path="benchmark"),
+    "how": st.Page(page_how, title="How it works", icon=":material/menu_book:", url_path="how-it-works"),
+}
+current = st.navigation(list(PAGES.values()), position="hidden")
+to_answer = len(replies.unanswered(df))
+labels = {"replies": f"Replies · {to_answer} to answer" if to_answer else "Replies",
+          "tracker": f"Fix tracker · {len(tracker)}" if len(tracker) else "Fix tracker"}
+with nav_box:
+    for key, page in PAGES.items():
+        st.page_link(page, label=labels.get(key, page.title), icon=page.icon)
+current.run()

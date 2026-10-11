@@ -133,7 +133,7 @@ def headline(df: pd.DataFrame) -> list[str]:
         best = refs.iloc[0]
         diff = best["store_score"] - mis["store_score"]
         out.append(f"The bar above it is consumer ride apps: {best['name']} {best['store_score']:.2f}★"
-                   + (f", only {diff:.2f}★ higher." if diff > 0 else f"; MoveInSync is already level or above."))
+                   + (f", only {diff:.2f}★ higher." if diff > 0 else "; MoveInSync is already level or above."))
 
     if pd.notna(mis.get("written_avg")):
         compare = pd.concat([rival, refs])
