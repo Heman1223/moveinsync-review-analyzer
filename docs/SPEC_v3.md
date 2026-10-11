@@ -132,7 +132,10 @@ the review prompt.
   installs, and from the newest ~500 reviews: written-review average, 1★ share, reply rate to 1–2★.
   Rules-only classification of peers' top complaint themes is optional. Refreshed with the main refresh (capped).
   Public data only; no claims about competitors beyond the numbers.
-- **B6 What-if planner.** Sliders: reply rate (%), reduction in complaints for each top issue (%), in-app prompt
+- **B6/B7: dropped (11 Oct 2026).** The benchmark showed MoveInSync already has the most ratings per install, so
+  the ask-volume maths isn't supported, and a what-if planner adds complexity without adding evidence. "How and when to
+  ask for ratings" stays in the memo as a quality recommendation. Original text kept below for the record.
+- ~~**B6 What-if planner.**~~ Sliders: reply rate (%), reduction in complaints for each top issue (%), in-app prompt
   share of daily trips (%). Output: projected written-review average and 1★ share; for the in-app prompt, extra
   ratings per day and an illustrative effect on the store score. Every assumption shown next to the result;
   labelled "illustration, not a forecast".
