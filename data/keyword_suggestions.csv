@@ -1,0 +1,31 @@
+﻿category,keyword,why,matches,precision_vs_labels,newly_covered,decision,recommendation
+stability,rooted device,Specific error message falsely flagging unrooted devices and preventing the app from launching.,26,1.0,5,pending,accept
+stability,server issues,Indicates backend/connectivity failures preventing users from accessing or performing actions.,3,1.0,3,pending,accept
+stability,goes blank,Describes visual app freezes or crashes to a white/blank screen.,3,1.0,1,pending,accept
+prompts,enable bluetooth,Specific intrusive prompt repeatedly asking users to turn on Bluetooth upon opening the app.,2,1.0,2,pending,reject: too few matches or low precision
+prompts,skip rating,Refers to the lack of an exit/skip button on mandatory pop-up feedback screens.,2,1.0,2,pending,reject: too few matches or low precision
+support,message the driver,Requests or reports issues with driver chat/messaging capabilities.,2,1.0,1,pending,reject: too few matches or low precision
+prompts,forces you to rate,Directly describes modal pop-ups forcing passengers to review drivers before continuing.,1,1.0,1,pending,reject: too few matches or low precision
+prompts,forced reviews,Mentions compulsory rating popups that block app usage.,1,1.0,1,pending,reject: too few matches or low precision
+login,frequent logout,Identifies session expiration and being repeatedly kicked out of the app.,1,1.0,1,pending,reject: too few matches or low precision
+login,not receiving codes,Directly indicates OTP and SMS/email verification code delivery failures.,1,1.0,1,pending,reject: too few matches or low precision
+support,no action taken,Points to unresponsive customer support and unresolved complaint tickets.,1,1.0,1,pending,reject: too few matches or low precision
+support,customer assistance,Relates directly to helpdesk and representative support availability.,1,1.0,1,pending,reject: too few matches or low precision
+routing,jaldi pick up,Hinglish phrase complaining about excessively early pickup scheduling.,1,1.0,1,pending,reject: too few matches or low precision
+routing,drop before pickup,Describes illogical route sequence errors where drop-offs are scheduled prior to pickups.,1,1.0,1,pending,reject: too few matches or low precision
+vehicle_vendor,turn on ac,Refers to transport vendor vehicle conditions and driver refusal to operate air conditioning.,1,1.0,1,pending,reject: too few matches or low precision
+notifications,wake up call,Complains about missing arrival alert phone calls or notifications prior to cab pickup.,1,1.0,1,pending,reject: too few matches or low precision
+login,user not found,Specific account authentication and directory lookup failure message during sign-in.,5,0.8,3,pending,accept
+stability,not compatible,Indicates device compatibility and operating system launch failures.,4,0.75,2,pending,accept
+tracking,where is the cab,Highlights missing vehicle coordinates or failed live tracking.,4,0.75,1,pending,accept
+cab_delay,not coming on time,Directly denotes cab/bus unpunctuality and delays.,3,0.67,1,pending,accept
+stability,uninstall and reinstall,Repeatedly mentioned by users as the only workaround when the app breaks or fails to function.,32,0.66,7,pending,accept
+support,call the driver,Refers to in-app calling mechanism failures when attempting to contact the assigned driver.,36,0.64,6,pending,accept
+cab_delay,never on time,Expresses recurrent chronic punctuality and pickup delay problems.,8,0.62,3,pending,accept
+support,contact the driver,Highlights missing or non-functional communication options between passenger and driver.,15,0.6,2,pending,accept
+booking,roaster,Common corporate shift roster/schedule management term used by employees modifying trips.,18,0.56,5,pending,accept: common misspelling of roster
+login,not registered,Indicates phone number recognition and login authorization errors.,20,0.5,7,pending,reject: too few matches or low precision
+tracking,cab arrival,Refers to ETA and arrival timestamp visibility issues.,6,0.5,1,pending,reject: too few matches or low precision
+login,register my mobile,Indicates repeated phone number onboarding and registration verification issues.,4,0.5,1,pending,reject: too few matches or low precision
+tracking,actual status,Refers to inaccurate or delayed vehicle progress updates on the map.,2,0.5,1,pending,reject: too few matches or low precision
+usability,trip history,Refers to user interface screens displaying past trip records and receipts.,15,0.47,9,pending,reject: too few matches or low precision

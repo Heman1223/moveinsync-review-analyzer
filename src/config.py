@@ -80,6 +80,7 @@ CATEGORIES = [
         "id": "safety",
         "name": "Safety concern",
         "fixable_by": "Review",
+        "description": "Personal safety risk: harassment, misbehaviour toward women, drunk or rash driving, unsafe pickup spots, emergencies, no way to get help.",
         "keywords": [
             r"unsafe", r"not safe", r"no safety", r"safety (issue|concern|risk)",
             r"harass\w*", r"molest\w*", r"assault\w*", r"inappropriate\w*",
@@ -93,6 +94,7 @@ CATEGORIES = [
         "id": "prompts",
         "name": "Repeated prompts and permissions",
         "fixable_by": "App",
+        "description": "Friction from mandatory pop-ups and permissions: accepting the transport policy every time, forced trip rating, seat-belt confirmations, excessive permissions.",
         "keywords": [
             r"(transport )?polic(y|ies)", r"agreements?", r"terms and conditions",
             r"accept (it |the \w+ )?every ?time", r"seat ?belt",
@@ -105,6 +107,7 @@ CATEGORIES = [
         "id": "login",
         "name": "Login, OTP and session",
         "fixable_by": "App",
+        "description": "Getting into the app: OTP not received, forced logouts, session expired, identity verification, password problems.",
         "keywords": [
             r"otp\w*", r"log ?in\w*", r"sign ?in\w*", r"logged out", r"logs? (me )?out",
             r"log ?out automatically", r"auto(matically)? log ?out", r"signs? (me )?out",
@@ -116,6 +119,7 @@ CATEGORIES = [
         "id": "notifications",
         "name": "Notifications",
         "fixable_by": "App",
+        "description": "Push notifications and alerts that are wrong, missing, late, duplicated or spammy.",
         "keywords": [
             r"notifications?", r"notif", r"alerts?", r"reminders?", r"push messages?",
         ],
@@ -124,6 +128,7 @@ CATEGORIES = [
         "id": "booking",
         "name": "Booking and schedule",
         "fixable_by": "App",
+        "description": "Creating, viewing, editing or cancelling trips and schedules: booking fails, booked trip missing, waitlist, booking window limits.",
         "keywords": [
             r"book\w*", r"schedul\w*", r"roster\w*", r"cancel\w*", r"wait ?list\w*",
             r"slots?", r"seats? (are |is )?(full|booked|not available)", r"reserv\w*",
@@ -135,6 +140,7 @@ CATEGORIES = [
         "id": "routing",
         "name": "Routing and pickup points",
         "fixable_by": "Ops",
+        "description": "Route planning and pickup/drop points: long routes, far or removed pickup points, wrong drop sequence, poor pooling.",
         "keywords": [
             r"rout(e|es|ing)", r"nodal\w*", r"pick ?-?up points?", r"drop points?",
             r"pick ?-?up locations?", r"boarding points?", r"drop sequence",
@@ -146,6 +152,7 @@ CATEGORIES = [
         "id": "driver",
         "name": "Driver behaviour",
         "fixable_by": "Ops",
+        "description": "Driver conduct: rude, abusive, unprofessional behaviour (non-safety).",
         "keywords": [
             r"rude\w*", r"misbehav\w*", r"abusive", r"abus\w*", r"behaviou?r\w*",
             r"behave", r"attitude", r"unprofessional", r"manners", r"arrogant",
@@ -156,6 +163,7 @@ CATEGORIES = [
         "id": "tracking",
         "name": "Tracking, ETA and map",
         "fixable_by": "App",
+        "description": "Live tracking, ETA and maps: wrong cab location, inaccurate ETA, map/zoom issues, cab or vehicle details not shown.",
         "keywords": [
             r"track\w*", r"gps", r"eta", r"live location", r"cab location",
             r"vehicle location", r"(wrong|incorrect|inaccurate) location", r"maps?",
@@ -168,6 +176,7 @@ CATEGORIES = [
         "id": "cab_delay",
         "name": "Cab late or no-show",
         "fixable_by": "Ops",
+        "description": "Cab punctuality: late cabs, cab never came, no-show disputes, long waits, late allocation.",
         "keywords": [
             r"late", r"delay\w*", r"not on time", r"never (came|come|arrived?)",
             r"(didn'?t|did not|does not|doesn'?t) (come|arrive|turn up)", r"no[- ]?show\w*",
@@ -181,6 +190,7 @@ CATEGORIES = [
         "id": "support",
         "name": "Support and contact",
         "fixable_by": "Ops",
+        "description": "Reaching people: helpdesk/customer support unresponsive, can't call driver or helpdesk, complaints and feedback ignored.",
         "keywords": [
             r"help ?desk", r"customer (care|support|service)", r"support team",
             r"no response", r"not respond\w*", r"no one (respond|answer|pick)\w*",
@@ -196,6 +206,7 @@ CATEGORIES = [
         "id": "vehicle_vendor",
         "name": "Vehicle and vendor quality",
         "fixable_by": "Ops",
+        "description": "Vehicle condition and transport vendor quality: dirty or old vehicles, AC, poor vendor management.",
         "keywords": [
             r"vendors?", r"transport (management|team|department|service)s?",
             r"(vehicle|cab|car|bus) (condition|quality|is dirty|was dirty)", r"dirty",
@@ -206,6 +217,7 @@ CATEGORIES = [
         "id": "stability",
         "name": "App stability and performance",
         "fixable_by": "App",
+        "description": "Technical reliability: app crashes, won't open, slow, stuck, errors, fails on mobile data or Wi-Fi, battery drain, bugs after an update.",
         "keywords": [
             r"crash\w*", r"(not|never|doesn'?t|does not|won'?t|will not) open\w*",
             r"not opening", r"stuck", r"hang\w*", r"freez\w*", r"frozen", r"slow\w*",
@@ -221,6 +233,7 @@ CATEGORIES = [
         "id": "usability",
         "name": "Usability and design",
         "fixable_by": "App",
+        "description": "Design and ease of use: not user friendly, confusing UI, removed features, old version was better, accessibility, dark mode.",
         "keywords": [
             r"user ?-?friendly", r"ui", r"ux", r"interface", r"design\w*",
             r"confus\w*", r"complicated", r"(difficult|hard) to (use|understand|find)",
@@ -240,3 +253,12 @@ NO_TEXT = "Rating only"        # no text at all
 
 LOW_INFO_MAX_WORDS = 3         # reviews this short with no keyword match are "Low info"
 COMPLAINT_MAX_RATING = 3       # issue analysis focuses on 1-3 star reviews
+
+# ---------------------------------------------------------------------------
+# LLM assist (optional; needs GEMINI_API_KEY in .env)
+# ---------------------------------------------------------------------------
+LLM_MODEL = "gemini-3.8-flash"     # pinned (not "-latest") so results stay reproducible
+LLM_BATCH_SIZE = 50            # reviews per request (fewer calls = fewer rate-limit hits)
+LLM_PAUSE_SECONDS = 7.0        # stays under free-tier requests-per-minute limits
+LLM_LABELS_CSV = DATA_DIR / "labels_llm.csv"
+KEYWORD_SUGGESTIONS_CSV = DATA_DIR / "keyword_suggestions.csv"
