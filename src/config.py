@@ -86,8 +86,10 @@ CATEGORIES = [
             r"harass\w*", r"molest\w*", r"assault\w*", r"inappropriate\w*",
             r"misbehav\w* with (a |the )?(girl|woman|lady|female)\w*",
             r"(girl|woman|women|lady|female) (employee|colleague|passenger)s?",
-            r"drunk", r"rash driv\w*", r"dangerous\w*", r"emergency", r"sos",
-            r"threat\w*", r"scared", r"afraid",
+            r"drunk", r"rash driv\w*", r"dangerous\w*", r"sos",
+            # "emergency"/"threat" alone are too broad ("stuck in an emergency", "a threat to my time")
+            r"emergency (button|number|contact|call|alert)s?", r"in case of (an |any )?emergency",
+            r"threaten\w*", r"scared", r"afraid",
         ],
     },
     {
