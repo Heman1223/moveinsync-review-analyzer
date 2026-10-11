@@ -279,3 +279,24 @@ KEYWORD_SUGGESTIONS_CSV = DATA_DIR / "keyword_suggestions.csv"
 LLM_THINKING_LEVEL = "low"     # classification is simple; less "thinking" = far fewer billed tokens
 LLM_USAGE_CSV = DATA_DIR / "llm_usage.csv"   # token counts per call, to track spend
 LLM_MAX_CALLS_PER_RUN = 10     # budget guard: one run can never send more than this many requests
+
+# ---------------------------------------------------------------------------
+# Benchmark: comparable apps (public Play Store data only)
+# ---------------------------------------------------------------------------
+# MoveInSync is measured the same way as everyone else here (newest N reviews),
+# so the comparison is like-for-like.
+BENCHMARK_APPS = {
+    "com.moveinsync.ets": {"name": "MoveInSync", "group": "MoveInSync"},
+    "com.routematic.employee": {"name": "Routematic", "group": "Employee transport"},
+    "com.app.newt.employee": {"name": "eFmFm Employee", "group": "Employee transport"},
+    "in.smarttransport.emp": {"name": "SMT Employee", "group": "Employee transport"},
+    "com.agiledge.myatom": {"name": "NeOffice Commute", "group": "Employee transport"},
+    "com.proficio.commute": {"name": "Commute Employee (Proficio)", "group": "Employee transport"},
+    "com.nxttrans.emp": {"name": "NxtTrans Employee", "group": "Employee transport"},
+    "app.goplus.in.myapplication": {"name": "Shuttl", "group": "Office commute (consumer)"},
+    "com.ubercab": {"name": "Uber", "group": "Ride-hailing (reference)"},
+    "com.rapido.passenger": {"name": "Rapido", "group": "Ride-hailing (reference)"},
+    "com.olacabs.customer": {"name": "Ola", "group": "Ride-hailing (reference)"},
+}
+BENCHMARK_SAMPLE = 500          # newest written reviews per app
+BENCHMARK_CSV = DATA_DIR / "benchmark.csv"

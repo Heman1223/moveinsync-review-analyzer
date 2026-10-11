@@ -15,7 +15,7 @@ import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
 
-from src import analysis, config, fix_tracker, pipeline
+from src import analysis, benchmark, config, fix_tracker, pipeline
 from src.classifier import category_name
 from src.playbook import EFFORT, VERIFY_FROM_REVIEWS
 
@@ -161,8 +161,8 @@ summary = analysis.issue_summary(df)
 tracker = fix_tracker.load(app_id)
 tracked = set(tracker["category"])
 
-tab_sum, tab_issues, tab_fix, tab_how = st.tabs(
-    ["Summary", "Issues", f"Fix tracker{f' ({len(tracker)})' if len(tracker) else ''}", "How it works"])
+tab_sum, tab_issues, tab_fix, tab_bench, tab_how = st.tabs(
+    ["Summary", "Issues", f"Fix tracker{f' ({len(tracker)})' if len(tracker) else ''}", "Benchmark", "How it works"])
 
 
 def fix_form(category: str, key: str, note_default: str = ""):
@@ -461,6 +461,77 @@ with tab_fix:
                 if st.button("Remove", key=f"rm_{t.category}", icon=":material/close:"):
                     fix_tracker.remove(app_id, t.category)
                     st.rerun()
+
+
+# ---------------------------------------------------------------------------
+# Benchmark tab
+# ---------------------------------------------------------------------------
+with tab_bench:
+    bench = benchmark.latest()
+    if bench.empty:
+        st.info("No benchmark yet. Run `python -m scripts.benchmark` (about 2 minutes, no Gemini).")
+    else:
+        as_of = pd.to_datetime(bench["fetched_at"]).max()
+        st.caption(f"Public Play Store data for {len(bench)} apps · measured {as_of:%d %b %Y}. "
+                   f"Every app, MoveInSync included, is measured the same way: its store listing plus its newest "
+                   f"{config.BENCHMARK_SAMPLE} written reviews.")
+        with st.container(border=True):
+            st.markdown("**In short**")
+            for line in benchmark.headline(bench):
+                st.markdown(f"- {line}")
+
+        st.markdown("**Store rating vs written-review rating**")
+        order = bench.sort_values("store_score")
+        fig = go.Figure()
+        for _, r in order.iterrows():
+            fig.add_trace(go.Scatter(x=[r["written_avg"], r["store_score"]], y=[r["name"]] * 2, mode="lines",
+                                     line=dict(color="rgba(128,128,128,0.45)", width=3), hoverinfo="skip",
+                                     showlegend=False))
+        fig.add_trace(go.Scatter(x=order["store_score"], y=order["name"], mode="markers", name="Store rating",
+                                 marker=dict(size=12, color="#4C9BE8"),
+                                 hovertemplate="%{y}: store %{x:.2f}★<extra></extra>"))
+        fig.add_trace(go.Scatter(x=order["written_avg"], y=order["name"], mode="markers",
+                                 name=f"Newest {config.BENCHMARK_SAMPLE} written reviews",
+                                 marker=dict(size=12, color="#E5735C"),
+                                 hovertemplate="%{y}: written reviews %{x:.2f}★<extra></extra>"))
+        fig.update_layout(height=40 * len(order) + 80, margin=dict(l=0, r=0, t=10, b=0),
+                          xaxis=dict(range=[1, 5], title="Stars"), yaxis=dict(title=None),
+                          legend=dict(orientation="h", yanchor="bottom", y=1.0, x=0))
+        st.plotly_chart(fig, width="stretch")
+        st.caption("Each line joins an app's store rating (blue) and the average of its newest written reviews (orange). "
+                   "For almost every app the written reviews are lower; the length of the line is the gap.")
+
+        st.markdown("**Details**")
+        st.dataframe(
+            bench.sort_values(["group", "store_score"], ascending=[True, False])[
+                ["name", "group", "store_score", "store_ratings", "written_avg", "pct_1_star", "reply_rate_unhappy",
+                 "pct_ratings_with_text", "ratings_per_100_installs", "top_complaints"]],
+            hide_index=True, width="stretch",
+            column_config={
+                "name": "App", "group": "Type",
+                "store_score": st.column_config.NumberColumn("Store rating", format="%.2f",
+                                                             help=GLOSSARY["Store rating"]),
+                "store_ratings": st.column_config.NumberColumn("Ratings", format="%d"),
+                "written_avg": st.column_config.NumberColumn("Written-review rating", format="%.2f",
+                                                             help=f"Average stars of the newest "
+                                                                  f"{config.BENCHMARK_SAMPLE} reviews with text."),
+                "pct_1_star": st.column_config.NumberColumn("1★ share", format="%.0f%%"),
+                "reply_rate_unhappy": st.column_config.NumberColumn(
+                    "Replies to 1–2★", format="%.0f%%", help="Share of recent 1–2★ reviews the company replied to."),
+                "pct_ratings_with_text": st.column_config.NumberColumn(
+                    "Ratings with text", format="%.0f%%",
+                    help="Of everyone who rated, how many also wrote a review. Written reviewers tend to be more "
+                         "critical than people who only tap a star."),
+                "ratings_per_100_installs": st.column_config.NumberColumn(
+                    "Ratings per 100 installs", format="%.1f",
+                    help="How many ratings an app collects per 100 installs (installs are a lower bound shown by "
+                         "Google). Higher means more users are rating."),
+                "top_complaints": st.column_config.TextColumn("Most common complaints", width="large"),
+            })
+        st.caption("Limits: other apps get far more reviews, so their newest 500 can cover just a few days while "
+                   "MoveInSync's cover months. Complaint themes use keyword rules built for MoveInSync, so they're "
+                   "rough for other apps (ride-hailing complaints about bookings and fares all land in "
+                   "\"Booking\"). Public numbers only; no claims about why other apps score as they do.")
 
 
 # ---------------------------------------------------------------------------

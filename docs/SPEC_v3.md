@@ -51,6 +51,25 @@ the store score.** Written reviews are what prospective users and HR buyers read
 
 ## 2. The core insight to lead with
 
+> **Correction (11 Oct 2026, after the benchmark in B5 ran):** the "sampling problem" framing below is **not
+> supported** and must not go in the memo as written.
+> - MoveInSync collects **11.5 ratings per 100 installs**, the highest of all 11 apps compared (Routematic 3.5,
+>   Uber 2.0, Rapido 4.9). Plenty of users already rate.
+> - Its newest written reviews (3.78★) are **level with Uber (3.73) and Rapido (3.77), and above Routematic (3.56)**.
+>   Every app's written reviews sit ~1★ below its store rating, so that gap is normal.
+> - It is **#1 of 7 employee-transport apps** on store rating; Uber (4.73) is only 0.09★ higher.
+> - **What does stand out:** Routematic replies to **100%** of recent 1–2★ reviews, MoveInSync to **1%**.
+>   And **21%** of MoveInSync's raters write text (Uber 5%), so its visible reviews come from a larger, more critical
+>   group. That is a possible explanation, not a proven one.
+>
+> **Revised levers:** (1) restart replies (the clearest gap with the direct competitor, no code needed);
+> (2) fix the ranked app problems; (3) review *how and when* the app asks for ratings (reviews complain about prompts
+> after every ride), using Google's In-App Review prompt at a good moment and within the no-gating policy. This is a
+> quality lever, not a volume one. "Lower than they should be" means: there is ~0.1★ of headroom to the best consumer
+> apps, and the reviews people read are full of fixable app problems.
+>
+> The original text below is kept for the record.
+
 **Ratings are a sampling problem before they are a bug problem.**
 - The brief: **~1.5M employees use the app every working day.** The store has **~115k ratings in total** since 2014.
   Almost no satisfied riders are ever asked to rate.
