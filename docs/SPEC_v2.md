@@ -41,20 +41,29 @@ The data shows a clear story before any classification is done:
 | Partner Lite `com.moveinsync.driver.lite` | 4.25★ lifetime; 108 text reviews |
 | Employee app text reviews available | ~23,600 |
 
-**Working hypothesis:** the lifetime number looks healthy, but recent sentiment has dropped sharply. Google's displayed rating gives more weight to recent reviews, so this is the gap that matters. Find out what changed (a release? an ops issue? a booking-policy change?).
+~~Working hypothesis: recent sentiment has dropped sharply.~~ **Disproved by the full fetch (11 Oct 2026):** text reviews have averaged 3.5–3.9★ with 24–30% 1★ in every quarter since 2023. There was no recent drop.
+
+**Revised picture (full history, 24,317 employee-app text reviews):**
+- **Two populations.** About 90k people rated without writing a review, mostly 5★, which keeps the store score at 4.64. The ~24k who write text are far unhappier (about 25% 1★ vs about 6% across all ratings). The written reviews are what people read on the listing.
+- **Developer replies stopped in mid-2024.** The reply rate was about 97–98% through 2024 Q1, fell to 53% in Q2, and has been 0–10% since 2024 Q3. This is a clear process change, worth a recommendation.
+- Store score history can't be reconstructed from public data. `snapshots.csv` builds it from now on.
 
 ---
 
 ## 3. Scope
 
 ### Apps covered ("our apps" is plural)
-| App | Package ID | Role |
-|---|---|---|
-| MoveInSync (Employee) | `com.moveinsync.ets` | **Default and primary focus** |
-| MoveInSync – Driver Partner | `com.moveinsync.driver.dco` | Secondary; low-data warning |
-| Moveinsync Partner – Lite | `com.moveinsync.driver.lite` | Secondary; low-data warning |
+| App | Package ID | Who uses it | Role |
+|---|---|---|---|
+| MoveInSync (Employee) | `com.moveinsync.ets` | Employees: book, track, board | **Default and primary focus** (~23.6k text reviews) |
+| Moveinsync Partner – Lite | `com.moveinsync.driver.lite` | Drivers: run assigned trips | Secondary; low-data warning (~111 text reviews) |
 
-(`field.moveinsync.ets` and `com.workinsync.meeting` exist but are out of scope. Mention this as an assumption.)
+Out of scope, with the reason stated in the method note:
+- `com.moveinsync.driver.dco` (Driver Partner): an onboarding form for prospective drivers; 46 ratings and 7 text reviews; not part of the commute.
+- `field.moveinsync.ets` (Field app): admin and supervisor tool; 24 ratings.
+- `com.workinsync.meeting` (Workplace): meeting-room and visitor kiosk; no ratings.
+
+Apps are listed in `src/config.py`; adding one back is a one-line change.
 
 ### Not in this version
 - Authentication, a database, a custom React frontend.
@@ -181,7 +190,7 @@ In plain words: "if this category's 1–2★ reviewers had been satisfied enough
 
 ### Layout (single page, top to bottom)
 1. **Header:** title, "Updated <time> · public Play Store reviews", **Refresh data** button (the only action button).
-2. **Filters:** app switcher (segmented: Employee app · Driver Partner · Partner Lite · Compare all) and period (30 days · 90 days · 6 months · All time).
+2. **Filters:** app switcher (segmented: Employee app · Partner Lite · Compare) and period (30 days · 90 days · 6 months · All time).
    - Low-data warning banner when the filtered sample has fewer than 30 reviews.
 3. **KPI row:** Recent rating (vs lifetime) · 1★ share · Reviews replied to (vs target) · Reviews analysed.
 4. **Trend chart:** average rating by month, dashed lines at releases.
