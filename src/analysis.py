@@ -17,10 +17,13 @@ store score would be smaller.
 
 from __future__ import annotations
 
+import re
+
 import pandas as pd
 
 from src import config
-from src.classifier import category_name, classify_df, fixable_by
+from src.classifier import category_name, classify_df, fixable_by, normalize
+from src.playbook import SUB_ISSUES
 
 SPECIAL = {config.OTHER, config.LOW_INFO, config.NO_TEXT}
 UPLIFT_TARGET = 4
@@ -44,7 +47,57 @@ def prepare(reviews: pd.DataFrame, llm_labels: pd.DataFrame | None = None) -> pd
     df["issue_name"] = df["primary_category"].map(lambda c: c if c in SPECIAL else category_name(c))
     df["fixable_by"] = df["primary_category"].map(lambda c: "" if c in SPECIAL else fixable_by(c))
     df["month"] = df["review_date"].dt.to_period("M").dt.to_timestamp()
+    df["sub_issue"] = [assign_sub_issue(t, c) for t, c in zip(df["review_text"], df["primary_category"])]
     return df
+
+
+# ---------------------------------------------------------------------------
+# Sub-issues (playbook): what exactly inside an issue, and a first step
+# ---------------------------------------------------------------------------
+OTHER_SUB = "other"
+_SUB_RX = {
+    cat: [(sub, re.compile(r"\b(?:" + "|".join(sub["keywords"]) + r")\b")) for sub in subs]
+    for cat, subs in SUB_ISSUES.items()
+}
+
+
+def assign_sub_issue(text, category: str) -> str | None:
+    """First matching sub-issue for this review's main category ('other' if none; None if no playbook)."""
+    if category not in _SUB_RX:
+        return None
+    norm = normalize(text)
+    for sub, rx in _SUB_RX[category]:
+        if rx.search(norm):
+            return sub["id"]
+    return OTHER_SUB
+
+
+def sub_issue_name(category: str, sub_id: str) -> str:
+    for sub in SUB_ISSUES.get(category, []):
+        if sub["id"] == sub_id:
+            return sub["name"]
+    return "Other / not specific"
+
+
+def sub_issue_breakdown(df: pd.DataFrame, category: str) -> pd.DataFrame:
+    """Sub-problems inside one issue, largest first, each with its suggested first step."""
+    rows = df[df["is_complaint"] & (df["primary_category"] == category)]
+    total = len(df)
+    out = []
+    for sub in SUB_ISSUES.get(category, []) + [{"id": OTHER_SUB, "name": "Other / not specific", "action": ""}]:
+        r = rows[rows["sub_issue"] == sub["id"]]
+        if r.empty:
+            continue
+        out.append({"sub_issue": sub["id"], "problem": sub["name"], "complaints": len(r),
+                    "share": round(len(r) / len(rows) * 100, 1), "avg_rating": round(r["rating"].mean(), 2),
+                    "uplift": round(_uplift(r, total), 3), "first_step": sub["action"],
+                    "actionable": sub["id"] != OTHER_SUB and not sub.get("vague", False),
+                    "latest": r["review_date"].max()})
+    res = pd.DataFrame(out)
+    if res.empty:
+        return res
+    res["_other"] = res["sub_issue"] == OTHER_SUB  # keep the catch-all last
+    return res.sort_values(["_other", "complaints"], ascending=[True, False]).drop(columns="_other").reset_index(drop=True)
 
 
 def filter_period(df: pd.DataFrame, app_id: str | None = None,
@@ -195,11 +248,45 @@ def issue_summary(df: pd.DataFrame, trend_days: int = 90) -> pd.DataFrame:
     return out.drop(columns="pinned").reset_index(drop=True)
 
 
-def top_fixes(summary: pd.DataFrame, n: int = 3) -> pd.DataFrame:
-    """Highest rating impact among issues MoveInSync can act on (safety is handled separately)."""
+def top_fixes(summary: pd.DataFrame, n: int = 3, exclude: set[str] | None = None) -> pd.DataFrame:
+    """Highest rating impact among issues MoveInSync can act on.
+
+    Safety is handled separately. `exclude` removes issues already being fixed, so the
+    list always shows what to work on next."""
     if summary.empty:
         return summary
-    return summary[summary["fixable_by"] != "Review"].head(n).reset_index(drop=True)
+    keep = (summary["fixable_by"] != "Review") & ~summary["category"].isin(exclude or set())
+    return summary[keep].head(n).reset_index(drop=True)
+
+
+def fix_progress(df: pd.DataFrame, category: str, since, window_days: int = 90) -> dict:
+    """Did complaints about an issue drop after a fix shipped?
+
+    Compares complaints per 100 written reviews in the `window_days` before `since`
+    with the period after it. Reviews lag behind fixes, so small samples are reported
+    as 'too early' rather than as a verdict."""
+    since = pd.Timestamp(since)
+    before = df[(df["review_date"] < since) & (df["review_date"] >= since - pd.Timedelta(days=window_days))]
+    after = df[df["review_date"] >= since]
+
+    def rate(d):
+        return (d["is_complaint"] & (d["primary_category"] == category)).sum() / len(d) * 100 if len(d) else None
+
+    rb, ra = rate(before), rate(after)
+    n_after = int((after["is_complaint"] & (after["primary_category"] == category)).sum())
+    if len(after) < 50:
+        verdict = "Too early: fewer than 50 reviews since the fix"
+    elif rb is None or rb == 0:
+        verdict = "No baseline to compare"
+    elif ra <= rb * 0.7:
+        verdict = "Improving"
+    elif ra >= rb * 1.3:
+        verdict = "Getting worse"
+    else:
+        verdict = "No clear change yet"
+    return {"per_100_before": round(rb, 1) if rb is not None else None,
+            "per_100_after": round(ra, 1) if ra is not None else None,
+            "reviews_after": len(after), "complaints_after": n_after, "verdict": verdict}
 
 
 def uncategorised(df: pd.DataFrame) -> dict:

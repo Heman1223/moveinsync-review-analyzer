@@ -1,0 +1,25 @@
+# Light and dark themes. The app follows the viewer's system setting by default;
+# anyone can switch manually via the ⋮ menu → Settings → Theme.
+
+[theme]
+baseRadius = "medium"
+showWidgetBorder = true
+
+[theme.light]
+primaryColor = "#2563EB"
+backgroundColor = "#FFFFFF"
+secondaryBackgroundColor = "#F3F5F8"
+textColor = "#1F2937"
+borderColor = "#E3E7ED"
+linkColor = "#1D4ED8"
+
+[theme.dark]
+primaryColor = "#60A5FA"
+backgroundColor = "#0F141A"
+secondaryBackgroundColor = "#1A2129"
+textColor = "#E5E9EE"
+borderColor = "#2B333D"
+linkColor = "#93C5FD"
+
+[browser]
+gatherUsageStats = false

@@ -114,3 +114,35 @@ def test_results_are_deterministic(sample):
 def test_trend_is_hidden_when_too_few_complaints(sample):
     s = analysis.issue_summary(sample)
     assert s["share_before"].isna().all() and s["share_last_period"].isna().all()
+
+
+def test_sub_issue_breakdown_splits_login(sample):
+    bd = analysis.sub_issue_breakdown(sample, "login").set_index("sub_issue")
+    assert bd.loc["otp_not_received", "complaints"] == 2
+    assert bd["first_step"].str.len().gt(0).all()
+
+
+def test_top_fixes_skips_issues_being_fixed(sample):
+    s = analysis.issue_summary(sample)
+    top = analysis.top_fixes(s, n=1, exclude={"login"})
+    assert top.iloc[0]["category"] == "cab_delay"
+
+
+def test_fix_progress_verdicts():
+    before = [(f"b{i}", "OTP never arrives" if i % 4 == 0 else "Very useful for daily office commute",
+               1 if i % 4 == 0 else 5, f"2026-06-{1 + i % 28:02d}", False) for i in range(60)]
+    after = [(f"a{i}", "Very useful for daily office commute", 5, f"2026-08-{1 + i % 28:02d}", False) for i in range(60)]
+    df = make(before + after)
+    p = analysis.fix_progress(df, "login", "2026-07-15")
+    assert p["per_100_before"] == 25.0 and p["per_100_after"] == 0.0
+    assert p["verdict"] == "Improving"
+    early = analysis.fix_progress(df, "login", "2026-08-27")
+    assert early["verdict"].startswith("Too early")
+
+
+def test_vague_buckets_are_not_actionable():
+    df = make([("a", "App is not working at all since morning", 1, "2026-09-01", False),
+               ("b", "App crashes every time I open the trip page", 1, "2026-09-02", False)])
+    bd = analysis.sub_issue_breakdown(df, "stability").set_index("sub_issue")
+    assert not bd.loc["not_working", "actionable"]
+    assert bd.loc["crash", "actionable"]

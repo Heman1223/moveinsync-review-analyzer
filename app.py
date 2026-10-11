@@ -8,11 +8,14 @@ if a Gemini key is configured, labels only the new unclassified ones.
 
 from __future__ import annotations
 
+from datetime import date
+
 import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
 
-from src import analysis, config, llm_assist
+from src import analysis, config, fix_tracker, llm_assist
+from src.classifier import category_name
 from src.collector import load_reviews, refresh
 
 st.set_page_config(page_title="MoveInSync review analyzer", page_icon="⭐", layout="wide")
@@ -191,10 +194,24 @@ with dist_col:
 
 
 # Fix these first ---------------------------------------------------------------
+def fix_form(category: str, key: str):
+    """Small form to put an issue into the fix tracker."""
+    status = st.radio("Status", fix_tracker.STATUSES, horizontal=True, key=f"{key}_status")
+    since = st.date_input("Since", value=date.today(), key=f"{key}_date",
+                          help="When work started or the fix was released. Before/after numbers use this date.")
+    note = st.text_input("Note (optional)", placeholder="e.g. session timeout raised in v12.20", key=f"{key}_note")
+    if st.button("Save", key=f"{key}_save", type="primary"):
+        fix_tracker.set_status(app_id, category, status, since, note)
+        st.rerun()
+
+
+tracker = fix_tracker.load(app_id)
+tracked = set(tracker["category"])
 st.subheader("Fix these first")
-st.caption("Ranked by estimated rating impact: how much the written-review average would rise if these "
-           "unhappy reviewers had given 4★. A ranking aid, not a forecast.")
-top = analysis.top_fixes(summary)
+st.caption("Ranked by estimated rating impact: how much the written-review average would rise if these unhappy "
+           "reviewers had given 4★ (a ranking aid, not a forecast). Mark an issue as being fixed and the next one "
+           "moves up; reviews take weeks to catch up with a fix.")
+top = analysis.top_fixes(summary, exclude=tracked)
 cards = st.columns(4)
 for i, r in top.iterrows():
     with cards[i].container(border=True):
@@ -208,6 +225,16 @@ for i, r in top.iterrows():
             if abs(change) >= 2:
                 arrow = "rising" if change > 0 else "falling"
                 st.caption(f"Share {arrow}: {r['share_before']:.0f}% → {r['share_last_period']:.0f}% (last 90 days)")
+        bd = analysis.sub_issue_breakdown(df, r["category"])
+        specific = bd[bd["actionable"]] if not bd.empty else bd
+        if not specific.empty:
+            b = specific.iloc[0]
+            st.markdown(f"**Start with:** {b['problem']} ({b['share']:.0f}% of these)")
+            st.caption(b["first_step"])
+        with st.popover("Mark as being fixed", icon=":material/build:", width="stretch"):
+            fix_form(r["category"], key=f"card_{r['category']}")
+if top.empty:
+    cards[0].info("Every ranked issue is in the fix tracker below.")
 if rh["reply_rate_unhappy"] is not None and rh["reply_rate_unhappy"] < REPLY_TARGET:
     with cards[3].container(border=True):
         st.badge("Quick win", color="green")
@@ -217,6 +244,32 @@ if rh["reply_rate_unhappy"] is not None and rh["reply_rate_unhappy"] < REPLY_TAR
         if rh["edited_after_reply"]:
             st.caption(f"Historically, {rh['edited_after_reply']} reviewers edited after a reply; "
                        f"{rh['edited_now_4_5']} now show 4–5★.")
+
+# Fix tracker -------------------------------------------------------------------
+if not tracker.empty:
+    st.markdown("#### Being fixed: are complaints dropping?")
+    st.caption("Complaints about the issue per 100 written reviews: 90 days before the date vs since. "
+               "Needs 50+ reviews after the date before giving a verdict.")
+    verdict_color = {"Improving": "green", "Getting worse": "red", "No clear change yet": "orange"}
+    for t in tracker.itertuples():
+        prog = analysis.fix_progress(app_all, t.category, t.since)
+        with st.container(border=True):
+            c_a, c_b, c_c, c_d = st.columns([3, 2, 2, 2], vertical_alignment="center")
+            with c_a:
+                st.markdown(f"**{category_name(t.category)}**  \n{t.status} since {pd.Timestamp(t.since):%d %b %Y}")
+                if t.note:
+                    st.caption(t.note)
+            c_b.metric("Before (per 100 reviews)", prog["per_100_before"] if prog["per_100_before"] is not None else "–")
+            c_c.metric("Since (per 100 reviews)", prog["per_100_after"] if prog["per_100_after"] is not None else "–",
+                       delta=(f"{prog['per_100_after'] - prog['per_100_before']:+.1f}"
+                              if prog["per_100_after"] is not None and prog["per_100_before"] is not None else None),
+                       delta_color="inverse",
+                       help=f"{prog['complaints_after']} complaints in {prog['reviews_after']} reviews since the date.")
+            with c_d:
+                st.badge(prog["verdict"], color=verdict_color.get(prog["verdict"], "gray"))
+                if st.button("Remove", key=f"rm_{t.category}", icon=":material/close:"):
+                    fix_tracker.remove(app_id, t.category)
+                    st.rerun()
 
 
 # Safety ------------------------------------------------------------------------
@@ -230,16 +283,25 @@ if len(safety):
 
 # All issues ----------------------------------------------------------------------
 st.subheader("All issues")
-st.caption("Click a row to read the reviews behind it. Based on 1–3★ reviews with enough text to classify.")
 if summary.empty:
     st.info("No complaints in this period.")
 else:
-    table = summary.assign(
-        trend=summary.apply(lambda r: "not enough data" if pd.isna(r["share_before"]) or pd.isna(r["share_last_period"])
-                            else ("▲ rising" if r["share_last_period"] - r["share_before"] >= 2
-                                  else "▼ falling" if r["share_before"] - r["share_last_period"] >= 2 else "–"), axis=1),
-        fixable=summary["fixable_by"].map(FIXABLE_LABEL),
-    )[["issue", "fixable", "reviews", "pct_of_complaints", "avg_rating", "uplift", "trend", "thumbs_up"]]
+    fl, fr = st.columns([3, 2], vertical_alignment="bottom")
+    owners = fl.pills("Fixable by", list(FIXABLE_LABEL.values()), selection_mode="multi",
+                      default=list(FIXABLE_LABEL.values()))
+    hide_tracked = fr.toggle("Hide issues already being fixed", value=False)
+    view = summary[summary["fixable_by"].map(FIXABLE_LABEL).isin(owners or list(FIXABLE_LABEL.values()))]
+    if hide_tracked:
+        view = view[~view["category"].isin(tracked)]
+    view = view.reset_index(drop=True)
+    table = view.assign(
+        trend=view.apply(lambda r: "not enough data" if pd.isna(r["share_before"]) or pd.isna(r["share_last_period"])
+                         else ("▲ rising" if r["share_last_period"] - r["share_before"] >= 2
+                               else "▼ falling" if r["share_before"] - r["share_last_period"] >= 2 else "–"), axis=1),
+        fixable=view["fixable_by"].map(FIXABLE_LABEL),
+        status=view["category"].map(dict(zip(tracker["category"], tracker["status"]))).fillna(""),
+    )[["issue", "fixable", "reviews", "pct_of_complaints", "avg_rating", "uplift", "trend", "status"]]
+    st.caption("Click a row (or pick below) to see what exactly people report, where to start, and the reviews.")
     event = st.dataframe(
         table, hide_index=True, width="stretch", on_select="rerun", selection_mode="single-row",
         column_config={
@@ -248,32 +310,79 @@ else:
                                                                  min_value=0, max_value=100),
             "avg_rating": st.column_config.NumberColumn("Avg ★", format="%.1f"),
             "uplift": st.column_config.NumberColumn("Rating impact", format="+%.2f ★"),
-            "trend": "Last 90 days", "thumbs_up": "👍 on reviews",
+            "trend": "Last 90 days", "status": "Fix status",
         })
-    # default: the top fix (first row that isn't the pinned safety row)
-    default_row = int((summary["category"] != "safety").idxmax()) if (summary["category"] != "safety").any() else 0
-    selected = event.selection.rows[0] if event.selection.rows else default_row
-    row = summary.iloc[selected]
-    st.markdown(f"#### {row['issue']} · what people say")
-    ex = analysis.examples(df, row["category"], n=6)
-    if ex.empty:
-        st.caption("No detailed reviews for this issue in the period.")
-    for e in ex.itertuples():
-        with st.container(border=True):
-            st.markdown(f"{'★' * int(e.rating)}{'☆' * (5 - int(e.rating))} · {e.review_date:%d %b %Y}"
-                        f"{f' · v{e.review_version}' if isinstance(e.review_version, str) else ''}"
-                        f"{f' · 👍 {e.thumbs_up}' if e.thumbs_up else ''}")
-            st.write(e.review_text)
-            how = (f"Keyword match: {e.matched_keywords}" if e.label_source == "rule"
-                   else f"Classified by LLM: {e.llm_reason}")
-            st.caption(how)
+
+    if not view.empty:
+        clicked = event.selection.rows[0] if event.selection.rows else None
+        non_safety = view.index[view["category"] != "safety"]
+        default_idx = clicked if clicked is not None else (int(non_safety[0]) if len(non_safety) else 0)
+        pick = st.selectbox("Look closer at", view["issue"].tolist(), index=default_idx, key=f"pick_{clicked}")
+        row = view[view["issue"] == pick].iloc[0]
+        cat = row["category"]
+
+        st.markdown(f"### {row['issue']}: what exactly, and where to start")
+        bd = analysis.sub_issue_breakdown(df, cat)
+        if not bd.empty:
+            st.dataframe(
+                bd[["problem", "complaints", "share", "avg_rating", "first_step"]], hide_index=True, width="stretch",
+                column_config={
+                    "problem": st.column_config.TextColumn("Specific problem", width="medium"),
+                    "complaints": "Complaints",
+                    "share": st.column_config.ProgressColumn("Share of this issue", format="%.0f%%",
+                                                             min_value=0, max_value=100),
+                    "avg_rating": st.column_config.NumberColumn("Avg ★", format="%.1f"),
+                    "first_step": st.column_config.TextColumn("Suggested first step", width="large"),
+                })
+            st.caption("Suggested first steps are starting points based on what reviewers describe, not verified "
+                       "root causes. Edit them in src/playbook.py.")
+
+        st.markdown("**Read the reviews**")
+        rows = df[df["is_complaint"] & (df["primary_category"] == cat)].copy()
+        sub_names = {s: analysis.sub_issue_name(cat, s) for s in rows["sub_issue"].dropna().unique()}
+        r1, r2, r3 = st.columns([2, 2, 3])
+        sub_pick = r1.selectbox("Specific problem", ["All"] + sorted(sub_names.values()), key=f"sub_{cat}")
+        version_opts = sorted(
+            rows["review_version"].dropna().astype(str).str.extract(r"^(\d+\.\d+)")[0].dropna().unique(),
+            key=lambda v: tuple(int(x) for x in v.split(".")), reverse=True)
+        ver_pick = r2.selectbox("App version", ["All"] + version_opts, key=f"ver_{cat}")
+        search = r3.text_input("Search in text", placeholder="otp, update, driver…", key=f"q_{cat}")
+        r4, r5, r6 = st.columns([2, 2, 3])
+        stars = r4.pills("Stars", [1, 2, 3], selection_mode="multi", default=[1, 2, 3],
+                         format_func=lambda s: f"{s}★", key=f"stars_{cat}")
+        sort = r5.selectbox("Sort by", ["Lowest rating", "Most liked", "Newest"], key=f"sort_{cat}")
+        show_n = r6.select_slider("Show", options=[5, 10, 25, 50, 100], value=10, key=f"n_{cat}")
+
+        if sub_pick != "All":
+            rows = rows[rows["sub_issue"].map(sub_names) == sub_pick]
+        if ver_pick != "All":
+            v = rows["review_version"].astype(str)
+            rows = rows[v.str.startswith(ver_pick + ".") | (v == ver_pick)]
+        if search:
+            rows = rows[rows["review_text"].fillna("").str.contains(search, case=False, regex=False)]
+        rows = rows[rows["rating"].isin(stars or [1, 2, 3])]
+        order = {"Lowest rating": (["rating", "thumbs_up", "review_date"], [True, False, False]),
+                 "Most liked": (["thumbs_up", "rating", "review_date"], [False, True, False]),
+                 "Newest": (["review_date"], [False])}[sort]
+        rows = rows.sort_values(order[0], ascending=order[1])
+        st.caption(f"Showing {min(show_n, len(rows))} of {len(rows)} matching complaints.")
+        for e in rows.head(show_n).itertuples():
+            with st.container(border=True):
+                st.markdown(f"{'★' * int(e.rating)}{'☆' * (5 - int(e.rating))} · {e.review_date:%d %b %Y}"
+                            f"{f' · v{e.review_version}' if isinstance(e.review_version, str) else ''}"
+                            f"{f' · 👍 {e.thumbs_up}' if e.thumbs_up else ''}"
+                            f" · *{analysis.sub_issue_name(cat, e.sub_issue)}*")
+                st.write(e.review_text)
+                how = (f"Keyword match: {e.matched_keywords}" if e.label_source == "rule"
+                       else f"Classified by LLM: {e.llm_reason}")
+                st.caption(how)
 
 
 # Export ------------------------------------------------------------------------
 st.subheader("Export")
 e1, e2 = st.columns(2)
 export_cols = ["app_id", "review_id", "review_date", "rating", "review_version", "thumbs_up", "review_text",
-               "issue_name", "fixable_by", "categories", "label_source", "matched_keywords", "llm_reason",
+               "issue_name", "sub_issue", "fixable_by", "categories", "label_source", "matched_keywords", "llm_reason",
                "is_safety", "has_reply"]
 e1.download_button("Download reviews (CSV)", df[export_cols].to_csv(index=False).encode("utf-8-sig"),
                    file_name=f"moveinsync_reviews_{app_id}_{period_choice.replace(' ', '')}.csv",
