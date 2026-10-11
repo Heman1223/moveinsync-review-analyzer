@@ -26,6 +26,8 @@ LOW_DATA = 30
 REPLY_TARGET = 80
 FIXABLE_LABEL = {"App": "App fix", "Ops": "Ops fix", "Review": "Human review"}
 FIXABLE_COLOR = {"App": "blue", "Ops": "orange", "Review": "red"}
+STATUS_COLOR = {"OK": "green", "WATCH": "orange", "ALERT": "red"}
+STATUS_ICON = {"OK": ":material/check_circle:", "WATCH": ":material/visibility:", "ALERT": ":material/warning:"}
 
 # Plain-English definitions, used as tooltips and in the "How it works" tab.
 GLOSSARY = {
@@ -44,6 +46,10 @@ GLOSSARY = {
     "Effort (1–5)": "A rough guess of how hard a fix is. " + " · ".join(f"{k} = {v}" for k, v in EFFORT.items()) + ".",
     "Check first": "What to look at in MoveInSync's own systems before building anything, to confirm that the "
                    "cause reviewers describe is real.",
+    "Plausible range": "With few reviews, a number can move a lot by chance. The shaded band or whisker shows "
+                       "where the true value most likely is (95%). If two ranges overlap, the difference may be chance.",
+    "Status": "OK = nothing unusual. WATCH = something is worth a look (a rising complaint, few replies, a worse "
+              "release). ALERT = 1★ reviews jumped sharply in the last 30 days.",
     "Low-info review": "Very short reviews like \"bad\" or \"worst app\". They count towards ratings but say nothing "
                        "about what went wrong.",
     "Labelled by rules / by LLM": "Most reviews are sorted by keyword rules you can read in the code. Reviews the "
@@ -181,6 +187,18 @@ def fix_form(category: str, key: str, note_default: str = ""):
 # Summary tab
 # ---------------------------------------------------------------------------
 with tab_sum:
+    status = analysis.weekly_status(app_all)
+    with st.container(border=True):
+        s1, s2 = st.columns([1, 5], vertical_alignment="center")
+        with s1:
+            st.badge(f"Status: {status['status']}", color=STATUS_COLOR[status["status"]],
+                     icon=STATUS_ICON[status["status"]])
+        with s2:
+            for reason in status["reasons"]:
+                st.markdown(f"- {reason}")
+        st.caption("Checks this app's latest reviews, whatever period is selected. The rules are listed in "
+                   "**How it works**.", help=GLOSSARY["Status"])
+
     with st.container(border=True):
         st.markdown("**In short**")
         for sentence in analysis.plain_summary(df, snap, exclude=tracked):
@@ -206,8 +224,14 @@ with tab_sum:
     trend_col, dist_col = st.columns([3, 1])
     with trend_col:
         st.markdown("**Average rating by month** · written reviews")
-        trend = analysis.monthly_trend(df)
+        trend = analysis.monthly_ranges(df)
         fig = go.Figure()
+        band = trend.dropna(subset=["avg_lo", "avg_hi"])
+        if len(band):
+            fig.add_trace(go.Scatter(x=pd.concat([band["month"], band["month"][::-1]]),
+                                     y=pd.concat([band["avg_hi"], band["avg_lo"][::-1]]),
+                                     fill="toself", fillcolor="rgba(76,155,232,0.15)", line=dict(width=0),
+                                     hoverinfo="skip", showlegend=False))
         fig.add_trace(go.Scatter(x=trend["month"], y=trend["avg_rating"], mode="lines+markers",
                                  name="Avg ★", line=dict(width=2),
                                  customdata=trend[["reviews", "pct_1_star"]],
@@ -227,7 +251,8 @@ with tab_sum:
         fig.update_layout(height=280, margin=dict(l=0, r=0, t=10, b=0), yaxis=dict(range=[1, 5], title=None),
                           xaxis=dict(title=None), showlegend=False)
         st.plotly_chart(fig, width="stretch")
-        st.caption("▲ and dotted lines mark app releases (versions with 30+ reviews). Hover for details.")
+        st.caption("Shaded band: plausible range for each month (wider when there are fewer reviews). "
+                   "▲ and dotted lines mark app releases (versions with 30+ reviews).", help=GLOSSARY["Plausible range"])
     with dist_col:
         st.markdown("**Star distribution**")
         dist = df["rating"].value_counts().reindex([5, 4, 3, 2, 1], fill_value=0)
@@ -238,6 +263,24 @@ with tab_sum:
         bar.update_layout(height=280, margin=dict(l=0, r=0, t=10, b=0), xaxis=dict(visible=False),
                           yaxis=dict(autorange="reversed"))  # 5★ on top
         st.plotly_chart(bar, width="stretch")
+
+    vr = analysis.version_ranges(df)
+    if not vr.empty:
+        with st.expander("Did a release make things worse? 1★ share by app version", icon=":material/new_releases:"):
+            vr = vr[vr["reviews"] >= 10]
+            colors = ["#4C9BE8" if ok else "rgba(150,150,150,0.5)" for ok in vr["enough_data"]]
+            vfig = go.Figure(go.Bar(
+                x=["v" + v for v in vr["version"]], y=vr["pct_1_star"], marker_color=colors,
+                error_y=dict(type="data", symmetric=False, array=vr["pct_1_hi"] - vr["pct_1_star"],
+                             arrayminus=vr["pct_1_star"] - vr["pct_1_lo"], color="gray", thickness=1),
+                customdata=vr[["reviews", "pct_1_lo", "pct_1_hi"]],
+                hovertemplate="%{x}: %{y:.0f}% 1★ (plausible %{customdata[1]:.0f}–%{customdata[2]:.0f}%)"
+                              "<br>%{customdata[0]} reviews<extra></extra>"))
+            vfig.update_layout(height=280, margin=dict(l=0, r=0, t=10, b=0),
+                               yaxis=dict(title="% of reviews that are 1★", rangemode="tozero"))
+            st.plotly_chart(vfig, width="stretch")
+            st.caption("Whiskers show the plausible range. If two versions' whiskers overlap, the difference may be "
+                       "chance. Grey bars have fewer than 30 reviews.", help=GLOSSARY["Plausible range"])
 
     st.subheader("Fix these first")
     st.caption("Ranked by rating impact (hover the ⓘ for what that means). Mark an issue as being fixed and the next "
@@ -560,6 +603,22 @@ time; rules + Gemini 75% (90% if a second issue counts).
 **Rating impact** = for each issue, add up (4 − stars) over its 1–2★ reviews, then divide by all written reviews in
 the period. In words: how much the written-review average would rise if those unhappy reviewers had given 4★.
 It is for ranking, not a forecast.
+
+#### How the status (OK / WATCH / ALERT) is decided
+Checked on each app's newest reviews, whatever period is selected:
+- **ALERT** if the 1★ share in the last 30 days is at least {analysis.STATUS_RULES['alert_1star_jump']} points higher
+  than in the 90 days before (needs {analysis.STATUS_RULES['min_recent_reviews']}+ recent reviews).
+- **WATCH** if any of these:
+  - that 1★ share is up {analysis.STATUS_RULES['watch_1star_jump']}+ points;
+  - an issue's share of complaints rose {analysis.STATUS_RULES['watch_issue_rise']}+ points in the last 90 days;
+  - fewer than {analysis.STATUS_RULES['watch_reply_rate']}% of recent 1–2★ reviews got a reply;
+  - the newest app version has {analysis.STATUS_RULES['watch_release_jump']}+ points more 1★ reviews than the one
+    before.
+- **OK** otherwise.
+
+#### Plausible ranges
+With few reviews, numbers jump around by chance. Charts show a shaded band or whiskers for where the true value most
+likely is (95%). When two ranges overlap, treat the difference as "maybe", not "proven".
 
 #### What this can't tell you
 - Reviews describe experiences, not proven root causes. Use them to decide where to look first, then confirm in

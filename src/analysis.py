@@ -379,17 +379,129 @@ def plain_summary(df: pd.DataFrame, snapshot: dict | None = None, exclude: set[s
             sentence += f", mostly \"{s['problem']}\" ({s['share']:.0f}% of those)"
         out.append(sentence + ". Start there.")
 
-        rising = summary[summary["share_before"].notna() & summary["share_last_period"].notna()
-                         & (summary["category"] != t["category"])].copy()
-        if not rising.empty:
-            rising["change"] = rising["share_last_period"] - rising["share_before"]
-            r = rising.sort_values("change", ascending=False).iloc[0]
-            if r["change"] >= 5:
-                out.append(f"Watch {r['issue']}: its share of complaints rose from {r['share_before']:.0f}% "
-                           f"to {r['share_last_period']:.0f}% in the last 90 days.")
+        # rising issues are reported by weekly_status(), shown just above this summary
 
     rh = reply_health(df)
     if rh["reply_rate_unhappy"] is not None and rh["reply_rate_unhappy"] < REPLY_GOOD:
         out.append(f"Only {rh['reply_rate_unhappy']:.0f}% of 1–2★ reviews get a reply. Restarting replies is the "
                    f"cheapest win: it needs no code.")
     return out
+
+
+# ---------------------------------------------------------------------------
+# Uncertainty: "plausible range" for small samples
+# ---------------------------------------------------------------------------
+def share_range(hits: int, n: int, z: float = 1.96) -> tuple[float | None, float | None]:
+    """Plausible range (95%, Wilson method) for a share like '1★ share', in percent.
+
+    With 10 reviews, 3 one-stars could easily be anything from ~11% to ~60%; with 1,000
+    reviews the range is tight. Used to grey out or caveat small samples."""
+    if n == 0:
+        return None, None
+    p = hits / n
+    denom = 1 + z * z / n
+    centre = (p + z * z / (2 * n)) / denom
+    half = z * ((p * (1 - p) / n + z * z / (4 * n * n)) ** 0.5) / denom
+    return round(max(0.0, centre - half) * 100, 1), round(min(1.0, centre + half) * 100, 1)
+
+
+def mean_range(values: pd.Series, z: float = 1.96) -> tuple[float | None, float | None]:
+    """Plausible range (95%) for an average star rating."""
+    n = len(values)
+    if n < 2:
+        return None, None
+    half = z * values.std(ddof=1) / n ** 0.5
+    return round(max(1.0, values.mean() - half), 2), round(min(5.0, values.mean() + half), 2)
+
+
+def monthly_ranges(df: pd.DataFrame) -> pd.DataFrame:
+    """monthly_trend plus plausible ranges for the average rating."""
+    trend = monthly_trend(df)
+    if trend.empty:
+        return trend.assign(avg_lo=[], avg_hi=[])
+    ranges = df.groupby("month")["rating"].apply(mean_range)
+    trend["avg_lo"] = trend["month"].map(lambda m: ranges[m][0])
+    trend["avg_hi"] = trend["month"].map(lambda m: ranges[m][1])
+    return trend
+
+
+def version_ranges(df: pd.DataFrame, min_reviews: int = 30) -> pd.DataFrame:
+    """version_table plus plausible ranges for each version's 1★ share."""
+    vt = version_table(df, min_reviews)
+    if vt.empty:
+        return vt.assign(pct_1_lo=[], pct_1_hi=[])
+    lo_hi = [share_range(round(p / 100 * n), n) for p, n in zip(vt["pct_1_star"], vt["reviews"])]
+    vt["pct_1_lo"] = [x[0] for x in lo_hi]
+    vt["pct_1_hi"] = [x[1] for x in lo_hi]
+    return vt
+
+
+# ---------------------------------------------------------------------------
+# Weekly status: OK / WATCH / ALERT, with the reasons in words
+# ---------------------------------------------------------------------------
+STATUS_RULES = {
+    "alert_1star_jump": 8,      # 1★ share in last 30 days up this many points vs the 90 days before → ALERT
+    "watch_1star_jump": 4,      # … up this many points → WATCH
+    "min_recent_reviews": 40,   # below this, the 30-day comparison is skipped (too noisy)
+    "watch_issue_rise": 5,      # an issue's share of complaints up this many points (last 90 days vs before)
+    "watch_reply_rate": 20,     # reply rate to 1–2★ reviews in the last 30 days below this %
+    "min_unhappy_reviews": 5,   # …only checked when there are at least this many 1–2★ reviews
+    "watch_release_jump": 5,    # newest version's 1★ share this many points above the previous version
+}
+
+
+def weekly_status(app_df: pd.DataFrame) -> dict:
+    """Status for one app across all its data, anchored on the newest review.
+
+    Simple, published rules (STATUS_RULES) so anyone can check why the status is what it is."""
+    R = STATUS_RULES
+    if app_df.empty:
+        return {"status": "OK", "reasons": ["No reviews yet."], "checks": {}}
+    end = app_df["review_date"].max()
+    last30 = app_df[app_df["review_date"] > end - pd.Timedelta(days=30)]
+    prev90 = app_df[(app_df["review_date"] <= end - pd.Timedelta(days=30))
+                    & (app_df["review_date"] > end - pd.Timedelta(days=120))]
+    alerts, watches, fine = [], [], []
+
+    if len(last30) >= R["min_recent_reviews"] and len(prev90):
+        now, before = (last30["rating"] == 1).mean() * 100, (prev90["rating"] == 1).mean() * 100
+        jump = now - before
+        line = f"1★ share in the last 30 days is {now:.0f}% vs {before:.0f}% in the 90 days before"
+        if jump >= R["alert_1star_jump"]:
+            alerts.append(line + ".")
+        elif jump >= R["watch_1star_jump"]:
+            watches.append(line + ".")
+        else:
+            fine.append(line + " (no real change).")
+
+    year = app_df[app_df["review_date"] > end - pd.Timedelta(days=365)]
+    summary = issue_summary(year)
+    if not summary.empty:
+        rising = summary[summary["share_before"].notna() & summary["share_last_period"].notna()].copy()
+        rising["change"] = rising["share_last_period"] - rising["share_before"]
+        for r in rising[rising["change"] >= R["watch_issue_rise"]].itertuples():
+            watches.append(f"{r.issue} complaints are rising: {r.share_before:.0f}% → {r.share_last_period:.0f}% "
+                           f"of complaints in the last 90 days.")
+
+    unhappy = last30[last30["rating"] <= UNHAPPY_MAX]
+    if len(unhappy) >= R["min_unhappy_reviews"]:
+        rate = unhappy["has_reply"].mean() * 100
+        if rate < R["watch_reply_rate"]:
+            watches.append(f"Only {rate:.0f}% of 1–2★ reviews in the last 30 days got a reply "
+                           f"({int(unhappy['has_reply'].sum())} of {len(unhappy)}).")
+
+    vt = version_ranges(year)
+    vt = vt[vt["enough_data"]]
+    if len(vt) >= 2:
+        newest, previous = vt.iloc[-1], vt.iloc[-2]
+        jump = newest["pct_1_star"] - previous["pct_1_star"]
+        if jump >= R["watch_release_jump"]:
+            clear = newest["pct_1_lo"] > previous["pct_1_hi"]
+            watches.append(f"The newest version (v{newest['version']}) has {newest['pct_1_star']:.0f}% 1★ reviews vs "
+                           f"{previous['pct_1_star']:.0f}% on v{previous['version']}"
+                           + (". The difference is clear, not chance." if clear else
+                              f" ({newest['reviews']} reviews so far, so it could still be chance; keep watching)."))
+
+    status = "ALERT" if alerts else "WATCH" if watches else "OK"
+    return {"status": status, "reasons": alerts + watches or fine or ["Nothing unusual."],
+            "as_of": end, "reviews_last_30": len(last30)}

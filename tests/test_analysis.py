@@ -173,3 +173,35 @@ def test_breakdown_carries_action_card_fields(sample):
     bd = analysis.sub_issue_breakdown(sample, "login").set_index("sub_issue")
     card = bd.loc["otp_not_received"]
     assert card["owner"] and card["measure"] and card["check_first"] and card["effort"] in range(1, 6)
+
+
+def test_share_range_is_wide_for_small_samples_and_tight_for_large():
+    lo, hi = analysis.share_range(3, 10)
+    assert lo < 15 and hi > 55
+    lo, hi = analysis.share_range(300, 1000)
+    assert 27 < lo < 30 < hi < 33
+
+
+def _days(start, n, text, rating):
+    base = pd.Timestamp(start)
+    return [(f"{text[:3]}{start}{i}", text, rating, str((base + pd.Timedelta(days=i % 28)).date()), False)
+            for i in range(n)]
+
+
+def test_weekly_status_alert_when_1_star_share_jumps():
+    rows = (_days("2026-06-01", 100, "Very useful for daily office commute", 5)       # older, happy
+            + _days("2026-06-05", 20, "OTP never arrives at all", 1)
+            + _days("2026-09-10", 30, "Very useful for daily office commute", 5)       # last 30 days
+            + _days("2026-09-12", 30, "OTP never arrives at all", 1))
+    st = analysis.weekly_status(make(rows))
+    assert st["status"] == "ALERT"
+    assert any("1★ share in the last 30 days" in r for r in st["reasons"])
+
+
+def test_weekly_status_watch_on_low_reply_rate_and_ok_otherwise():
+    calm = (_days("2026-05-01", 120, "Very useful for daily office commute", 5)
+            + _days("2026-08-20", 60, "Very useful for daily office commute", 5))
+    assert analysis.weekly_status(make(calm))["status"] == "OK"
+    unanswered = calm + _days("2026-09-10", 6, "Cab is always late in the evening", 2)
+    st = analysis.weekly_status(make(unanswered))
+    assert st["status"] == "WATCH" and any("got a reply" in r for r in st["reasons"])
