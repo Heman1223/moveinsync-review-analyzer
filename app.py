@@ -15,7 +15,7 @@ import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
 
-from src import analysis, benchmark, config, fix_tracker, pipeline
+from src import analysis, benchmark, config, fix_tracker, pipeline, replies
 from src.classifier import category_name
 from src.playbook import EFFORT, VERIFY_FROM_REVIEWS
 
@@ -167,8 +167,10 @@ summary = analysis.issue_summary(df)
 tracker = fix_tracker.load(app_id)
 tracked = set(tracker["category"])
 
-tab_sum, tab_issues, tab_fix, tab_bench, tab_how = st.tabs(
-    ["Summary", "Issues", f"Fix tracker{f' ({len(tracker)})' if len(tracker) else ''}", "Benchmark", "How it works"])
+tab_sum, tab_issues, tab_reply, tab_fix, tab_bench, tab_how = st.tabs(
+    ["Summary", "Issues", "Reply to reviews", f"Fix tracker{f' ({len(tracker)})' if len(tracker) else ''}",
+     "Benchmark", "How it works"])
+GEMINI_DRAFTS_PER_SESSION = 20   # protects the API budget; saved drafts don't count
 
 
 def fix_form(category: str, key: str, note_default: str = ""):
@@ -473,6 +475,75 @@ with tab_issues:
 
 
 # ---------------------------------------------------------------------------
+# Reply to reviews tab
+# ---------------------------------------------------------------------------
+with tab_reply:
+    todo = replies.unanswered(df)
+    unhappy_total = int((df["rating"] <= 2).sum())
+    bench_now = benchmark.latest()
+    rival = bench_now[bench_now["name"] == "Routematic"] if not bench_now.empty else bench_now
+    why = (f" For comparison, Routematic replies to {rival.iloc[0]['reply_rate_unhappy']:.0f}% of its recent 1–2★ "
+           f"reviews." if len(rival) and pd.notna(rival.iloc[0]["reply_rate_unhappy"]) else "")
+    st.markdown(f"**{len(todo)} of {unhappy_total} unhappy (1–2★) reviews in this period have no reply.**{why}")
+    st.caption("Pick a review, get a suggested reply, check it, copy it, and post it in Google Play Console → "
+               "Ratings and reviews. Nothing is posted from here. Replace [support email] before posting.")
+
+    gemini_ok = pipeline.llm_allowed()
+    used = st.session_state.setdefault("gemini_drafts_used", 0)
+    if not gemini_ok:
+        st.info("Suggested replies use ready-made templates for each problem (no AI). Gemini drafts are switched "
+                "off here.", icon=":material/info:")
+
+    if todo.empty:
+        st.success("Every unhappy review in this period has a reply.")
+    else:
+        q1, q2, q3 = st.columns([3, 2, 2])
+        issue_names = sorted(todo["issue_name"].dropna().unique())
+        issue_pick = q1.selectbox("Issue", ["All"] + issue_names, key="reply_issue")
+        min_words = q2.selectbox("Length", ["Any length", "At least 8 words"], index=1, key="reply_len",
+                                 help="Longer reviews say more, so they're more useful to answer first.")
+        show_n = q3.select_slider("Show", options=[5, 10, 20, 50], value=10, key="reply_n")
+        view = todo
+        if issue_pick != "All":
+            view = view[view["issue_name"] == issue_pick]
+        if min_words != "Any length":
+            view = view[view["review_text"].fillna("").str.split().str.len() >= 8]
+        st.caption(f"Showing {min(show_n, len(view))} of {len(view)}, newest first.")
+
+        for e in view.head(show_n).itertuples():
+            problem = (analysis.sub_issue_name(e.primary_category, e.sub_issue)
+                       if isinstance(e.sub_issue, str) else e.issue_name)
+            with st.container(border=True):
+                st.markdown(f"{'★' * int(e.rating)}{'☆' * (5 - int(e.rating))} · {e.review_date:%d %b %Y} · "
+                            f"*{e.issue_name}{f' → {problem}' if problem != e.issue_name else ''}*")
+                st.write(e.review_text)
+                key = f"draft_{e.review_id}"
+                b1, b2, _ = st.columns([2, 2, 3])
+                if b1.button("Suggest a reply", key=f"tpl_{e.review_id}", icon=":material/edit_note:"):
+                    st.session_state[key] = (replies.template_reply(e.primary_category, e.sub_issue), "template")
+                if gemini_ok:
+                    saved = replies.cached_draft(e.review_id)
+                    label = "Show Gemini draft" if saved else "Write with Gemini"
+                    if b2.button(label, key=f"ai_{e.review_id}", icon=":material/auto_awesome:",
+                                 disabled=(not saved and used >= GEMINI_DRAFTS_PER_SESSION),
+                                 help=f"One call per review; saved so it never costs twice. "
+                                      f"{GEMINI_DRAFTS_PER_SESSION - used} new drafts left this session."):
+                        with st.spinner("Writing…"):
+                            text, source = replies.llm_reply(e.review_id, e.review_text, int(e.rating),
+                                                             e.primary_category, e.sub_issue, problem)
+                        if source == "gemini":
+                            st.session_state["gemini_drafts_used"] = used + 1
+                        st.session_state[key] = (text, source)
+                if key in st.session_state:
+                    text, source = st.session_state[key]
+                    st.code(text, language=None, wrap_lines=True)
+                    note = {"template": "Template for this problem", "gemini": "Written by Gemini",
+                            "saved": "Gemini draft (saved earlier)"}[source]
+                    st.caption(f"{note} · {len(text)}/{replies.MAX_CHARS} characters · copy with the icon at the "
+                               f"top right of the box, check it, then post it in Play Console.")
+
+
+# ---------------------------------------------------------------------------
 # Fix tracker tab
 # ---------------------------------------------------------------------------
 with tab_fix:
@@ -603,6 +674,13 @@ time; rules + Gemini 75% (90% if a second issue counts).
 **Rating impact** = for each issue, add up (4 − stars) over its 1–2★ reviews, then divide by all written reviews in
 the period. In words: how much the written-review average would rise if those unhappy reviewers had given 4★.
 It is for ranking, not a forecast.
+
+#### How suggested replies work
+For an unanswered 1–2★ review, **Suggest a reply** builds a reply from a ready-made line for that review's specific
+problem (no AI, no cost). **Write with Gemini** (only where enabled) drafts a reply to that exact review, under strict
+rules: under Google Play's 350-character limit, no blaming the user, no promises of refunds or fix dates, no invented
+facts. Drafts that break a rule are replaced by the template. Each review costs at most one call, ever. A person
+checks every reply and posts it in Play Console; nothing is posted from here.
 
 #### How the status (OK / WATCH / ALERT) is decided
 Checked on each app's newest reviews, whatever period is selected:
