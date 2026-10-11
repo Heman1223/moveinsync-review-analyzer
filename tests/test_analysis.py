@@ -109,3 +109,8 @@ def test_results_are_deterministic(sample):
     a = analysis.issue_summary(sample)
     b = analysis.issue_summary(sample)
     pd.testing.assert_frame_equal(a, b)
+
+
+def test_trend_is_hidden_when_too_few_complaints(sample):
+    s = analysis.issue_summary(sample)
+    assert s["share_before"].isna().all() and s["share_last_period"].isna().all()

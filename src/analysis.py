@@ -143,12 +143,22 @@ def _uplift(rows: pd.DataFrame, total_reviews: int) -> float:
     return float((UPLIFT_TARGET - unhappy["rating"]).sum() / total_reviews) if total_reviews else 0.0
 
 
+MIN_TREND_COMPLAINTS = 20   # both comparison windows need this many complaints for a trend to mean anything
+
+
 def issue_summary(df: pd.DataFrame, trend_days: int = 90) -> pd.DataFrame:
-    """One row per issue category, ranked by rating impact. Safety is pinned to the top."""
+    """One row per issue category, ranked by rating impact. Safety is pinned to the top.
+
+    share_before / share_last_period compare the last `trend_days` with the rest of the
+    period; they are left empty when either window has too few complaints."""
     total = len(df)
     complaints = df[df["is_complaint"] & df["is_substantive"]]
     n_comp = len(complaints)
     cut = df["review_date"].max() - pd.Timedelta(days=trend_days) if total else None
+    if cut is not None:
+        n_recent = int((complaints["review_date"] > cut).sum())
+        if min(n_recent, n_comp - n_recent) < MIN_TREND_COMPLAINTS:
+            cut = None
     rows = []
     for cat in config.CATEGORIES:
         cid = cat["id"]
