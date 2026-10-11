@@ -1,0 +1,71 @@
+# Answers "How are our Play Store ratings?" every week without anyone pressing a button.
+#
+# Every Monday 09:00 IST (03:30 UTC), and on demand from the Actions tab:
+#   1. fetch new reviews (keyword rules only by default: no Gemini cost)
+#   2. re-measure the benchmark apps
+#   3. write the weekly digest (docs/weekly_digest.md + a dated copy) and the analysis snapshot
+#   4. commit the updated data back, so the deployed dashboard shows it
+#
+# Optional Gemini labelling of new reviews: add a repository secret GEMINI_API_KEY and a
+# repository variable USE_LLM = true. It stays capped at 10 calls per run (src/config.py).
+
+name: Weekly ratings update
+
+on:
+  schedule:
+    - cron: "30 3 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: weekly-ratings
+  cancel-in-progress: false
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      PYTHONIOENCODING: utf-8
+      GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+      DISABLE_LLM: ${{ vars.USE_LLM == 'true' && '0' || '1' }}
+      DASHBOARD_URL: ${{ vars.DASHBOARD_URL }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: pip
+
+      - name: Install
+        run: pip install -r requirements.txt
+
+      - name: Tests
+        run: python -m pytest -q
+
+      - name: Fetch new reviews
+        run: python refresh.py
+
+      - name: Benchmark
+        run: python -m scripts.benchmark
+        continue-on-error: true   # a competitor's page failing shouldn't block the digest
+
+      - name: Weekly digest and analysis snapshot
+        run: |
+          python -m scripts.digest
+          python -m scripts.report
+
+      - name: Commit updated data
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add data/ docs/weekly_digest.md docs/digests/ docs/analysis_snapshot.md
+          if git diff --cached --quiet; then
+            echo "No changes this week."
+          else
+            git commit -m "Weekly ratings update: $(date -u +%Y-%m-%d)"
+            git push
+          fi
