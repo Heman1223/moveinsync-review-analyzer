@@ -158,3 +158,18 @@ def test_plain_summary_mentions_top_issue_and_replies(sample):
 def test_plain_summary_respects_issues_being_fixed(sample):
     text = " ".join(analysis.plain_summary(sample, exclude={"login"}))
     assert "biggest fixable cause is Cab late" in text
+
+
+def test_every_specific_problem_has_a_complete_action_card():
+    from src.playbook import EFFORT, SUB_ISSUES
+    for cat, subs in SUB_ISSUES.items():
+        for sub in subs:
+            for field in ["name", "keywords", "action", "owner", "measure", "check_first"]:
+                assert sub.get(field), f"{cat}/{sub['id']} is missing {field}"
+            assert sub["effort"] in EFFORT, f"{cat}/{sub['id']} has effort {sub.get('effort')}"
+
+
+def test_breakdown_carries_action_card_fields(sample):
+    bd = analysis.sub_issue_breakdown(sample, "login").set_index("sub_issue")
+    card = bd.loc["otp_not_received"]
+    assert card["owner"] and card["measure"] and card["check_first"] and card["effort"] in range(1, 6)

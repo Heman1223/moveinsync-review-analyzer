@@ -17,6 +17,7 @@ import streamlit as st
 
 from src import analysis, config, fix_tracker, pipeline
 from src.classifier import category_name
+from src.playbook import EFFORT, VERIFY_FROM_REVIEWS
 
 st.set_page_config(page_title="MoveInSync review analyzer", page_icon="⭐", layout="wide")
 
@@ -40,6 +41,9 @@ GLOSSARY = {
     "App fix / Ops fix": "App fix: the app team can solve it (bugs, design). Ops fix: transport operations, vendors "
                          "or drivers need to act. Human review: safety concerns someone must read.",
     "Specific problem": "A narrower complaint inside an issue (for example, inside Login: OTP not received).",
+    "Effort (1–5)": "A rough guess of how hard a fix is. " + " · ".join(f"{k} = {v}" for k, v in EFFORT.items()) + ".",
+    "Check first": "What to look at in MoveInSync's own systems before building anything, to confirm that the "
+                   "cause reviewers describe is real.",
     "Low-info review": "Very short reviews like \"bad\" or \"worst app\". They count towards ratings but say nothing "
                        "about what went wrong.",
     "Labelled by rules / by LLM": "Most reviews are sorted by keyword rules you can read in the code. Reviews the "
@@ -161,12 +165,13 @@ tab_sum, tab_issues, tab_fix, tab_how = st.tabs(
     ["Summary", "Issues", f"Fix tracker{f' ({len(tracker)})' if len(tracker) else ''}", "How it works"])
 
 
-def fix_form(category: str, key: str):
+def fix_form(category: str, key: str, note_default: str = ""):
     """Small form to put an issue into the fix tracker."""
     status = st.radio("Status", fix_tracker.STATUSES, horizontal=True, key=f"{key}_status")
     since = st.date_input("Since", value=date.today(), key=f"{key}_date",
                           help="When work started or the fix was released. Before/after numbers use this date.")
-    note = st.text_input("Note (optional)", placeholder="e.g. session timeout raised in v12.20", key=f"{key}_note")
+    note = st.text_input("Note (optional)", value=note_default, placeholder="e.g. session timeout raised in v12.20",
+                         key=f"{key}_note")
     if st.button("Save", key=f"{key}_save", type="primary"):
         fix_tracker.set_status(app_id, category, status, since, note)
         st.rerun()
@@ -255,12 +260,16 @@ with tab_sum:
                                f"(last 90 days)")
             bd = analysis.sub_issue_breakdown(df, r["category"])
             specific = bd[bd["actionable"]] if not bd.empty else bd
+            note_default = ""
             if not specific.empty:
                 b = specific.iloc[0]
+                note_default = b["problem"]
                 st.markdown(f"**Start with:** {b['problem']} ({b['share']:.0f}% of these)")
                 st.caption(b["first_step"])
+                st.caption(f"**Who:** {b['owner']}  \n**Effort:** {int(b['effort'])}/5 · {EFFORT[int(b['effort'])]}")
             with st.popover("Mark as being fixed", icon=":material/build:", width="stretch"):
-                fix_form(r["category"], key=f"card_{r['category']}")
+                fix_form(r["category"], key=f"card_{r['category']}", note_default=note_default)
+            st.caption("Full plan for each problem: **Issues** tab.")
     if top.empty:
         cards[0].info("Every ranked issue is in the Fix tracker.")
     if rh["reply_rate_unhappy"] is not None and rh["reply_rate_unhappy"] < REPLY_TARGET:
@@ -327,23 +336,44 @@ with tab_issues:
             row = view[view["issue"] == pick].iloc[0]
             cat = row["category"]
 
-            st.markdown(f"### {row['issue']}: what exactly, and where to start")
+            st.markdown(f"### {row['issue']}: what exactly, and what to do")
             bd = analysis.sub_issue_breakdown(df, cat)
             if not bd.empty:
-                st.dataframe(
-                    bd[["problem", "complaints", "share", "avg_rating", "first_step"]], hide_index=True,
-                    width="stretch",
-                    column_config={
-                        "problem": st.column_config.TextColumn("Specific problem", width="medium",
-                                                               help=GLOSSARY["Specific problem"]),
-                        "complaints": "Complaints",
-                        "share": st.column_config.ProgressColumn("Share of this issue", format="%.0f%%",
-                                                                 min_value=0, max_value=100),
-                        "avg_rating": st.column_config.NumberColumn("Avg ★", format="%.1f"),
-                        "first_step": st.column_config.TextColumn("Suggested first step", width="large"),
-                    })
-                st.caption("Suggested first steps are starting points based on what reviewers describe, not verified "
-                           "root causes.")
+                left, right = st.columns([2, 3])
+                with left:
+                    st.markdown("**What people complain about**")
+                    st.dataframe(
+                        bd[["problem", "complaints", "share"]], hide_index=True, width="stretch",
+                        column_config={
+                            "problem": st.column_config.TextColumn("Specific problem", help=GLOSSARY["Specific problem"]),
+                            "complaints": "Complaints",
+                            "share": st.column_config.ProgressColumn("Share", format="%.0f%%",
+                                                                     min_value=0, max_value=100),
+                        })
+                    vague = bd[~bd["actionable"]]
+                    if not vague.empty:
+                        st.caption(f"{int(vague['complaints'].sum())} complaints are too vague to point at a specific "
+                                   f"problem (\"not working\", \"worst app\"), so they have no action card.")
+                with right:
+                    st.markdown("**Action cards**, largest problem first")
+                    st.caption("Starting points based on what reviewers describe. Confirm the cause with "
+                               "**Check first** before building.")
+                    for j, c in enumerate(bd[bd["actionable"]].itertuples()):
+                        with st.expander(f"**{c.problem}** · {c.complaints} complaints ({c.share:.0f}%)",
+                                         expanded=(j == 0)):
+                            st.markdown(f"**What to do:** {c.first_step}")
+                            w1, w2 = st.columns(2)
+                            w1.markdown(f"**Who:** {c.owner}")
+                            w2.markdown(f"**Effort:** {'●' * int(c.effort)}{'○' * (5 - int(c.effort))} "
+                                        f"{int(c.effort)}/5 · {EFFORT[int(c.effort)]}",
+                                        help=GLOSSARY["Effort (1–5)"])
+                            st.markdown(f"**Check first** (MoveInSync's own data): {c.check_first}",
+                                        help=GLOSSARY["Check first"])
+                            st.markdown(f"**How you'll know it worked:**  \n"
+                                        f"- In MoveInSync's data, watch: {c.measure}.  \n"
+                                        f"- In reviews: {VERIFY_FROM_REVIEWS}")
+                            with st.popover("Mark as being fixed", icon=":material/build:"):
+                                fix_form(cat, key=f"issue_{cat}_{c.sub_issue}", note_default=c.problem)
 
             st.markdown("**Read the reviews**")
             rows = df[df["is_complaint"] & (df["primary_category"] == cat)].copy()

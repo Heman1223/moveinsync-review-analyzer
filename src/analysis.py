@@ -91,6 +91,8 @@ def sub_issue_breakdown(df: pd.DataFrame, category: str) -> pd.DataFrame:
         out.append({"sub_issue": sub["id"], "problem": sub["name"], "complaints": len(r),
                     "share": round(len(r) / len(rows) * 100, 1), "avg_rating": round(r["rating"].mean(), 2),
                     "uplift": round(_uplift(r, total), 3), "first_step": sub["action"],
+                    "owner": sub.get("owner", ""), "effort": sub.get("effort"),
+                    "measure": sub.get("measure", ""), "check_first": sub.get("check_first", ""),
                     "actionable": sub["id"] != OTHER_SUB and not sub.get("vague", False),
                     "latest": r["review_date"].max()})
     res = pd.DataFrame(out)
