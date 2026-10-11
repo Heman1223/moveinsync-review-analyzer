@@ -462,7 +462,6 @@ def weekly_status(app_df: pd.DataFrame) -> dict:
     prev90 = app_df[(app_df["review_date"] <= end - pd.Timedelta(days=30))
                     & (app_df["review_date"] > end - pd.Timedelta(days=120))]
     alerts, watches, fine = [], [], []
-    short = []   # 3–6 word versions of each reason, for one-line headlines
 
     if len(last30) >= R["min_recent_reviews"] and len(prev90):
         now, before = (last30["rating"] == 1).mean() * 100, (prev90["rating"] == 1).mean() * 100
@@ -470,10 +469,8 @@ def weekly_status(app_df: pd.DataFrame) -> dict:
         line = f"1★ share in the last 30 days is {now:.0f}% vs {before:.0f}% in the 90 days before"
         if jump >= R["alert_1star_jump"]:
             alerts.append(line + ".")
-            short.insert(0, "1★ reviews jumped this month")
         elif jump >= R["watch_1star_jump"]:
             watches.append(line + ".")
-            short.append("1★ reviews are creeping up")
         else:
             fine.append(line + " (no real change).")
 
@@ -485,7 +482,6 @@ def weekly_status(app_df: pd.DataFrame) -> dict:
         for r in rising[rising["change"] >= R["watch_issue_rise"]].itertuples():
             watches.append(f"{r.issue} complaints are rising: {r.share_before:.0f}% → {r.share_last_period:.0f}% "
                            f"of complaints in the last 90 days.")
-            short.append(f"{r.issue.split(',')[0].split(' and ')[0].lower()} complaints are rising")
 
     unhappy = last30[last30["rating"] <= UNHAPPY_MAX]
     if len(unhappy) >= R["min_unhappy_reviews"]:
@@ -493,7 +489,6 @@ def weekly_status(app_df: pd.DataFrame) -> dict:
         if rate < R["watch_reply_rate"]:
             watches.append(f"Only {rate:.0f}% of 1–2★ reviews in the last 30 days got a reply "
                            f"({int(unhappy['has_reply'].sum())} of {len(unhappy)}).")
-            short.append("unhappy reviewers aren't getting replies")
 
     vt = version_ranges(year)
     vt = vt[vt["enough_data"]]
@@ -506,8 +501,7 @@ def weekly_status(app_df: pd.DataFrame) -> dict:
                            f"{previous['pct_1_star']:.0f}% on v{previous['version']}"
                            + (". The difference is clear, not chance." if clear else
                               f" ({newest['reviews']} reviews so far, so it could still be chance; keep watching)."))
-            short.append(f"v{newest['version']} may be worse")
 
     status = "ALERT" if alerts else "WATCH" if watches else "OK"
     return {"status": status, "reasons": alerts + watches or fine or ["Nothing unusual."],
-            "short": short or ["nothing unusual"], "as_of": end, "reviews_last_30": len(last30)}
+            "as_of": end, "reviews_last_30": len(last30)}

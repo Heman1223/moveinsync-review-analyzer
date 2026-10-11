@@ -1,31 +1,28 @@
 # Light and dark themes. The app follows the viewer's system setting by default;
 # anyone can switch manually via the ⋮ menu → Settings → Theme.
-# Page background is softly tinted so white cards stand out (see the CSS in app.py).
 
 [theme]
 baseRadius = "medium"
 showWidgetBorder = true
-font = "Inter, sans-serif"
-headingFont = "Inter, sans-serif"
 
 [theme.light]
 primaryColor = "#2563EB"
-backgroundColor = "#F2F5FA"
-secondaryBackgroundColor = "#FFFFFF"
-textColor = "#1E293B"
-borderColor = "#E2E8F0"
+backgroundColor = "#FFFFFF"
+secondaryBackgroundColor = "#F3F5F8"
+textColor = "#1F2937"
+borderColor = "#E3E7ED"
 linkColor = "#1D4ED8"
 
 [theme.dark]
 primaryColor = "#60A5FA"
-backgroundColor = "#0B1220"
-secondaryBackgroundColor = "#131C2E"
-textColor = "#E2E8F0"
-borderColor = "#24324A"
+backgroundColor = "#0F141A"
+secondaryBackgroundColor = "#1A2129"
+textColor = "#E5E9EE"
+borderColor = "#2B333D"
 linkColor = "#93C5FD"
-
-[client]
-toolbarMode = "viewer"
 
 [browser]
 gatherUsageStats = false
+
+[client]
+toolbarMode = "viewer"
