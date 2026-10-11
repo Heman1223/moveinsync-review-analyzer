@@ -113,6 +113,8 @@ CATEGORIES = [
             r"log ?out automatically", r"auto(matically)? log ?out", r"signs? (me )?out",
             r"session (expired|timeout|time out)", r"unauthori[sz]ed", r"password",
             r"verif(y|ication|ied)", r"validat\w*", r"credentials?", r"re-?login",
+            # added from LLM keyword suggestions (approved 2026-10-11)
+            r"user not found",
         ],
     },
     {
@@ -134,6 +136,8 @@ CATEGORIES = [
             r"slots?", r"seats? (are |is )?(full|booked|not available)", r"reserv\w*",
             r"chance passenger", r"ad ?hoc", r"modify", r"edit (the |my )?(trip|booking)",
             r"edit\w*",
+            # added from LLM keyword suggestions (approved 2026-10-11)
+            r"roaster\w*",
         ],
     },
     {
@@ -170,6 +174,8 @@ CATEGORIES = [
             r"zoom\w*", r"navigation", r"arrival time", r"address\w*", r"geo ?location",
             r"location\w*", r"locate", r"real ?-?time",
             r"(cab|vehicle|car|driver) (details|number|status|info)",
+            # added from LLM keyword suggestions (approved 2026-10-11)
+            r"where is the cab",
         ],
     },
     {
@@ -184,6 +190,8 @@ CATEGORIES = [
             r"waiting (for|time)", r"allocat\w*", r"cab (nahi|nhi) (aayi|aaya|aati|aata)",
             r"(nahi|nhi) (aayi|aaya)", r"der se",
             r"(made|make|kept|keep) (me|us) wait\w*", r"wait(ed)? (for|till)", r"reassign\w*",
+            # added from LLM keyword suggestions (approved 2026-10-11)
+            r"never on time", r"not coming on time",
         ],
     },
     {
@@ -200,6 +208,8 @@ CATEGORIES = [
             r"calls? (are )?(not|never) (connect\w*|answered)",
             r"(cannot|can'?t|unable to) (connect|reach|contact)\w*", r"nobody (answers|responds|picks)",
             r"feedback\w*",
+            # added from LLM keyword suggestions (approved 2026-10-11)
+            r"call the driver", r"contact the driver",
         ],
     },
     {
@@ -227,6 +237,8 @@ CATEGORIES = [
             r"network", r"something went wrong", r"lag\w*", r"(chal|khul) (nahi|nhi)",
             r"after (the )?(latest |new |recent )?update", r"new update",
             r"never works?", r"stop working", r"unreliable",
+            # added from LLM keyword suggestions (approved 2026-10-11)
+            r"rooted device", r"uninstall and reinstall", r"not compatible", r"server issues", r"goes blank",
         ],
     },
     {
@@ -262,3 +274,6 @@ LLM_BATCH_SIZE = 50            # reviews per request (fewer calls = fewer rate-l
 LLM_PAUSE_SECONDS = 7.0        # stays under free-tier requests-per-minute limits
 LLM_LABELS_CSV = DATA_DIR / "labels_llm.csv"
 KEYWORD_SUGGESTIONS_CSV = DATA_DIR / "keyword_suggestions.csv"
+LLM_THINKING_LEVEL = "low"     # classification is simple; less "thinking" = far fewer billed tokens
+LLM_USAGE_CSV = DATA_DIR / "llm_usage.csv"   # token counts per call, to track spend
+LLM_MAX_CALLS_PER_RUN = 10     # budget guard: one run can never send more than this many requests

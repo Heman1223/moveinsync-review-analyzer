@@ -99,3 +99,12 @@ def test_no_key_means_not_available(monkeypatch, tmp_path):
     monkeypatch.delenv("GEMINI_API_KEY", raising=False)
     monkeypatch.setattr(config, "ROOT", tmp_path)   # no .env there
     assert llm_assist.is_available() is False
+
+
+def test_budget_guard_caps_requests_per_run(tmp_path, monkeypatch):
+    monkeypatch.setattr(config, "LLM_BATCH_SIZE", 1)
+    df = reviews([(f"r{i}", "Sab bekaar hai, kuch bhi theek se nahi hota yaar", 1) for i in range(5)])
+    gen = fake_model({})
+    summary = llm_assist.label_unclassified(df, generate=gen, pause=0, path=tmp_path / "l.csv", max_calls=2)
+    assert len(gen.calls) == 2
+    assert summary["held_back"] == 3

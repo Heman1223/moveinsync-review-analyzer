@@ -17,6 +17,8 @@ def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--limit", type=int, default=None, help="label at most N reviews")
     parser.add_argument("--suggest", action="store_true", help="generate keyword suggestions")
+    parser.add_argument("--max-calls", type=int, default=None,
+                        help="override the per-run request cap (config.LLM_MAX_CALLS_PER_RUN)")
     args = parser.parse_args()
 
     if not llm_assist.is_available():
@@ -32,7 +34,7 @@ def main() -> int:
         return 0
 
     print(f"Model: {config.LLM_MODEL}")
-    summary = llm_assist.label_unclassified(classified, limit=args.limit)
+    summary = llm_assist.label_unclassified(classified, limit=args.limit, max_calls=args.max_calls)
     print(f"\nDone: {summary}")
     return 0 if summary["failed_batches"] == 0 else 1
 

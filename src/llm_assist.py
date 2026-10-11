@@ -63,9 +63,27 @@ def _default_generate(prompt: str, response_schema: dict) -> str:
             temperature=0,  # as repeatable as the model allows
             response_mime_type="application/json",
             response_json_schema=response_schema,
+            thinking_config=types.ThinkingConfig(thinking_level=config.LLM_THINKING_LEVEL),
         ),
     )
+    _log_usage(resp.usage_metadata)
     return resp.text
+
+
+def _log_usage(usage) -> None:
+    """Append token counts for every call to data/llm_usage.csv (paid key: track spend)."""
+    if usage is None:
+        return
+    row = pd.DataFrame([{
+        "time": datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S"),
+        "model": config.LLM_MODEL,
+        "thinking_level": config.LLM_THINKING_LEVEL,
+        "input_tokens": usage.prompt_token_count or 0,
+        "output_tokens": usage.candidates_token_count or 0,
+        "thinking_tokens": usage.thoughts_token_count or 0,
+    }])
+    path = config.LLM_USAGE_CSV
+    row.to_csv(path, mode="a", header=not path.exists(), index=False)
 
 
 def _is_permanent(exc: Exception) -> bool:
@@ -163,7 +181,8 @@ def load_llm_labels(path=None) -> pd.DataFrame:
 
 
 def label_unclassified(classified: pd.DataFrame, limit: int | None = None,
-                       generate=None, pause: float | None = None, path=None) -> dict:
+                       generate=None, pause: float | None = None, path=None,
+                       max_calls: int | None = None) -> dict:
     """Send rule-unclassified, substantive 1-3 star reviews to the LLM (only ones not cached).
 
     classified: output of classifier.classify_df().
@@ -172,6 +191,7 @@ def label_unclassified(classified: pd.DataFrame, limit: int | None = None,
     generate = generate or _default_generate
     pause = config.LLM_PAUSE_SECONDS if pause is None else pause
     path = path or config.LLM_LABELS_CSV
+    max_calls = config.LLM_MAX_CALLS_PER_RUN if max_calls is None else max_calls
 
     cached = load_llm_labels(path)
     todo = classified[
@@ -181,9 +201,14 @@ def label_unclassified(classified: pd.DataFrame, limit: int | None = None,
     ]
     if limit:
         todo = todo.head(limit)
+    size = config.LLM_BATCH_SIZE
+    held_back = max(0, len(todo) - max_calls * size)
+    if held_back:
+        print(f"  Budget guard: labelling {max_calls * size} now, {held_back} left for a later run "
+              f"(raise LLM_MAX_CALLS_PER_RUN or pass --max-calls to do more).")
+        todo = todo.head(max_calls * size)
 
     labelled, failed_batches = 0, 0
-    size = config.LLM_BATCH_SIZE
     for start in range(0, len(todo), size):
         batch = todo.iloc[start:start + size]
         try:
@@ -205,7 +230,7 @@ def label_unclassified(classified: pd.DataFrame, limit: int | None = None,
             time.sleep(pause)
 
     return {"to_label": len(todo), "labelled": labelled, "failed_batches": failed_batches,
-            "total_cached": len(cached)}
+            "held_back": held_back, "total_cached": len(cached)}
 
 
 def apply_llm_labels(classified: pd.DataFrame, labels: pd.DataFrame | None = None) -> pd.DataFrame:
