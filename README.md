@@ -8,7 +8,7 @@ and answers "How are our ratings?" every week automatically.
 - **Recommendation memo:** [deliverables/recommendation_memo.md](deliverables/recommendation_memo.md)
 - **How I got there and tools used:** [deliverables/method_note.md](deliverables/method_note.md)
 - **This week's digest:** [docs/weekly_digest.md](docs/weekly_digest.md)
-- **Live dashboard:** _link added after deployment_
+- **Live dashboard:** https://moveinsync-review-analyzer.streamlit.app
 
 ## Key findings (12 Oct 2026)
 

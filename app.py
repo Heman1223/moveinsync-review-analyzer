@@ -127,10 +127,10 @@ with f1:
     app_choice = st.segmented_control("App", list(app_options) + ["Compare apps"],
                                       default=next(iter(app_options)), label_visibility="collapsed")
 with f2:
-    period_choice = st.segmented_control("Period", list(PERIODS), default="12 months",
+    period_choice = st.segmented_control("Period", list(PERIODS), default="90 days",
                                          label_visibility="collapsed")
 app_choice = app_choice or next(iter(app_options))
-period_choice = period_choice or "12 months"
+period_choice = period_choice or "90 days"
 days = PERIODS[period_choice]
 
 

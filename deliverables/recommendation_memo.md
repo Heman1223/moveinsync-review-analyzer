@@ -2,7 +2,7 @@
 
 **To:** MoveInSync Product, Engineering and Customer Experience
 **From:** Heman Sharma · FDE intern case study · 12 Oct 2026
-**Live dashboard:** [link] · **Code and data:** github.com/Heman1223/moveinsync-review-analyzer
+**Live dashboard:** https://moveinsync-review-analyzer.streamlit.app · **Code and data:** github.com/Heman1223/moveinsync-review-analyzer
 
 ---
 
