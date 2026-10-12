@@ -5,6 +5,7 @@ This project collects public Google Play reviews, sorts the complaints into issu
 impact on the rating, turns each one into an action (owner, effort, what to check, how to know it worked),
 and answers "How are our ratings?" every week automatically.
 
+- **Full report (12 pages, PDF):** [deliverables/MoveInSync_Ratings_Report.pdf](deliverables/MoveInSync_Ratings_Report.pdf)
 - **Recommendation memo:** [deliverables/recommendation_memo.md](deliverables/recommendation_memo.md)
 - **How I got there and tools used:** [deliverables/method_note.md](deliverables/method_note.md)
 - **This week's digest:** [docs/weekly_digest.md](docs/weekly_digest.md)
