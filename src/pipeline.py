@@ -27,9 +27,15 @@ INPUTS = [config.REVIEWS_CSV, config.LLM_LABELS_CSV,
 BOOL_COLS = ["has_reply", "is_complaint", "is_substantive", "is_safety"]
 
 
+def public_demo() -> bool:
+    """PUBLIC_DEMO=1 on the public link: read-only (no refresh, no fix tracking, no Gemini)."""
+    return os.environ.get("PUBLIC_DEMO", "") == "1"
+
+
 def llm_allowed() -> bool:
-    """LLM calls need a key and must not be disabled (DISABLE_LLM=1 on the public deploy)."""
-    return llm_assist.is_available() and os.environ.get("DISABLE_LLM", "") != "1"
+    """LLM calls need a key and must not be disabled (DISABLE_LLM=1, or the public demo)."""
+    return (llm_assist.is_available() and os.environ.get("DISABLE_LLM", "") != "1"
+            and not public_demo())
 
 
 def _fingerprint() -> str:

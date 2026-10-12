@@ -40,3 +40,12 @@ def test_rebuilds_when_inputs_change_and_round_trips(tmp_path, monkeypatch):
 
     rules.write_text("v2")
     assert not pipeline.is_fresh()
+
+
+def test_public_demo_switches_llm_off(monkeypatch):
+    monkeypatch.setattr(pipeline.llm_assist, "is_available", lambda: True)
+    monkeypatch.delenv("DISABLE_LLM", raising=False)
+    monkeypatch.delenv("PUBLIC_DEMO", raising=False)
+    assert pipeline.llm_allowed()
+    monkeypatch.setenv("PUBLIC_DEMO", "1")
+    assert pipeline.public_demo() and not pipeline.llm_allowed()

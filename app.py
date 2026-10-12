@@ -20,6 +20,7 @@ from src.classifier import category_name
 from src.playbook import EFFORT, VERIFY_FROM_REVIEWS
 
 st.set_page_config(page_title="MoveInSync review analyzer", page_icon="⭐", layout="wide")
+PUBLIC = pipeline.public_demo()   # read-only public link: no refresh, no fix tracking, no Gemini
 
 PERIODS = {"30 days": 30, "90 days": 90, "6 months": 182, "12 months": 365, "All time": None}
 LOW_DATA = 30
@@ -107,8 +108,10 @@ with head_l:
     st.caption(f"Why are Play Store ratings where they are, and what should we fix first? "
                f"Public Google Play reviews · updated {last_updated()}")
 with head_r:
-    if st.button("Refresh data", icon=":material/refresh:", width="stretch",
-                 help="Fetch new reviews from Google Play (takes under a minute)."):
+    if PUBLIC:
+        st.caption("Data updates automatically every Monday.")
+    elif st.button("Refresh data", icon=":material/refresh:", width="stretch",
+                   help="Fetch new reviews from Google Play (takes under a minute)."):
         run_refresh()
 
 if not config.REVIEWS_CSV.exists():
@@ -175,6 +178,10 @@ GEMINI_DRAFTS_PER_SESSION = 20   # protects the API budget; saved drafts don't c
 
 def fix_form(category: str, key: str, note_default: str = ""):
     """Small form to put an issue into the fix tracker."""
+    if PUBLIC:
+        st.caption("Fix tracking is switched off on the public demo, so visitors can't change it. "
+                   "It works when the dashboard is run by the team.")
+        return
     status = st.radio("Status", fix_tracker.STATUSES, horizontal=True, key=f"{key}_status")
     since = st.date_input("Since", value=date.today(), key=f"{key}_date",
                           help="When work started or the fix was released. Before/after numbers use this date.")
