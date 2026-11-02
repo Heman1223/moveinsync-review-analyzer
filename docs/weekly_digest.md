@@ -1,40 +1,40 @@
-# MoveInSync Play Store ratings: week to 24 Oct 2026
+# MoveInSync Play Store ratings: week to 01 Nov 2026
 
-*Employee app · written reviews up to 24 Oct 2026 · generated automatically from public Google Play data*
+*Employee app · written reviews up to 01 Nov 2026 · generated automatically from public Google Play data*
 
 ## Status: WATCH
 
-- App stability and performance complaints are rising: 14% → 24% of complaints in the last 90 days.
-- Only 3% of 1–2★ reviews in the last 30 days got a reply (2 of 61).
+- App stability and performance complaints are rising: 16% → 21% of complaints in the last 90 days.
+- Only 5% of 1–2★ reviews in the last 30 days got a reply (3 of 60).
 
 ## This week in numbers
 
 | | This week | Last week |
 |---|---|---|
-| New written reviews | 44 | 55 |
-| Average stars | 3.89★ | 3.93★ |
-| 1★ share | 23% | 24% |
-| 1–2★ reviews answered | 1 of 13 | 1 of 13 |
+| New written reviews | 49 | 43 |
+| Average stars | 3.98★ | 3.86★ |
+| 1★ share | 20% | 23% |
+| 1–2★ reviews answered | 1 of 12 | 1 of 13 |
 
-Store rating: **4.641★** from 115,412 ratings (+0.001★ and +267 ratings since 19 Oct)
+Store rating: **4.640★** from 115,727 ratings (-0.001★ and +315 ratings since 26 Oct)
 
 ## What to fix (last 90 days)
 
-1. **App stability and performance**: 24% of complaints. Start with: **Blocked by a wrong "not installed from Play Store" / rooted-phone check** (Mobile app team (security)).
-2. **Booking and schedule**: 14% of complaints. Start with: **Booking fails or the steps are confusing** (Product + mobile app team).
-3. **Tracking, ETA and map**: 10% of complaints. Start with: **Cab location wrong / not updating** (Maps/tracking team + driver app team).
+1. **App stability and performance**: 21% of complaints. Start with: **Won't open / stuck loading / blank screen** (Mobile app team).
+2. **Booking and schedule**: 15% of complaints. Start with: **Booking fails or the steps are confusing** (Product + mobile app team).
+3. **Login, OTP and session**: 11% of complaints. Start with: **OTP not received or slow** (Mobile app team + SMS/OTP provider).
 
 ## Against the competition
 
-Store rating 4.64★ vs Routematic 4.34★. Routematic answers 96% of its unhappy reviews; MoveInSync 1% (measured 26 Oct).
+Store rating 4.64★ vs Routematic 4.33★. Routematic answers 100% of its unhappy reviews; MoveInSync 2% (measured 02 Nov).
 
 ## In their words (this week)
 
-> 1★ · Tracking, ETA and map: "The app is too slow and is very slow to show the correct location and also the map face is really not good .. worst app to use"
+> 1★ · Login, OTP and session: "worst app.. after logging in it asks for authentication.. by the time i open authenticator and come back to move in sync.. the app gets error and have to login from first.. this is happening for more than 10times and sti…"
 
-> 2★ · Notifications: "still irritating push message of trip is not booked despite having valid trip booked. 06-10-2026 even after booked the trip it keep sends the push notification that trip is not booked. old: Bring monthly view ,not just d…"
+> 2★ · Other / unclassified: "i am unable to rate any of my trips just useless"
 
-> 1★ · Login, OTP and session: "unable too log in and even customer care not helpful"
+> 1★ · Repeated prompts and permissions: "Every time it asks for permission for terms and conditions. several instances it won't allow booking. Last three days raising quarries to issue with booking shuttle for next week. Thousands of employees facing problems s…"
 
 ---
 Full detail: open the dashboard (`streamlit run app.py`).
