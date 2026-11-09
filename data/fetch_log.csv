@@ -23,3 +23,7 @@ run_time,app_id,lang,mode,rows,error
 2026-11-02 11:36:07,com.moveinsync.ets,hi,since 2026-10-22,0,
 2026-11-02 11:36:07,com.moveinsync.driver.lite,en,since 2026-10-17,1,
 2026-11-02 11:36:07,com.moveinsync.driver.lite,hi,since 2026-10-17,0,
+2026-11-09 11:58:59,com.moveinsync.ets,en,since 2026-10-30,60,
+2026-11-09 11:58:59,com.moveinsync.ets,hi,since 2026-10-30,0,
+2026-11-09 11:58:59,com.moveinsync.driver.lite,en,since 2026-10-17,1,
+2026-11-09 11:58:59,com.moveinsync.driver.lite,hi,since 2026-10-17,0,

@@ -11,3 +11,5 @@ snapshot_time,app_id,score,ratings,reviews,stars_1,stars_2,stars_3,stars_4,stars
 2026-10-26 09:17:05,com.moveinsync.driver.lite,4.245098,712,112,90,20,27,55,515,Varies with device,"100,000+"
 2026-11-02 11:36:08,com.moveinsync.ets,4.639785,115727,23753,7424,881,1201,6937,99280,12.20.0,"1,000,000+"
 2026-11-02 11:36:08,com.moveinsync.driver.lite,4.245098,712,112,90,20,27,55,515,Varies with device,"100,000+"
+2026-11-09 11:59:00,com.moveinsync.ets,4.6434503,116005,23799,7395,859,1159,6877,99710,12.21.0,"1,000,000+"
+2026-11-09 11:59:00,com.moveinsync.driver.lite,4.28,717,112,78,28,28,57,522,Varies with device,"100,000+"
